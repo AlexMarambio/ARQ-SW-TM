@@ -1,0 +1,170 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: repararia-postgres
+    environment:
+      POSTGRES_DB: repararia
+      POSTGRES_USER: repararia
+      POSTGRES_PASSWORD: repararia_dev
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U repararia -d repararia"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - repararia-internal
+
+  chromadb:
+    image: chromadb/chroma:0.5.23
+    container_name: repararia-chromadb
+    volumes:
+      - chroma_data:/chroma/chroma
+    networks:
+      - repararia-internal
+
+  api-gateway:
+    build:
+      context: ..
+      dockerfile: repararia/api-gateway/Dockerfile
+    container_name: repararia-api-gateway
+    environment:
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      JWT_ALGORITHM: HS256
+      AUTH_SERVICE_HOST: servicio-autenticacion
+      AUTH_SERVICE_PORT: 5001
+      CLIENTES_SERVICE_HOST: servicio-clientes
+      CLIENTES_SERVICE_PORT: 5002
+      ORDENES_SERVICE_HOST: servicio-ordenes
+      ORDENES_SERVICE_PORT: 5003
+      INVENTARIO_SERVICE_HOST: servicio-inventario
+      INVENTARIO_SERVICE_PORT: 5004
+      FACTURACION_SERVICE_HOST: servicio-facturacion
+      FACTURACION_SERVICE_PORT: 5005
+    ports:
+      - "8000:8000"
+    depends_on:
+      servicio-autenticacion:
+        condition: service_started
+      servicio-clientes:
+        condition: service_started
+      servicio-ordenes:
+        condition: service_started
+      servicio-inventario:
+        condition: service_started
+      servicio-facturacion:
+        condition: service_started
+    networks:
+      - repararia-internal
+
+  servicio-autenticacion:
+    build:
+      context: ./servicios/autenticacion
+    container_name: repararia-servicio-autenticacion
+    environment:
+      DATABASE_URL: postgresql+asyncpg://repararia:repararia_dev@postgres:5432/repararia
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      TCP_HOST: 0.0.0.0
+      TCP_PORT: 5001
+    expose:
+      - "5001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - repararia-internal
+
+  servicio-clientes:
+    build:
+      context: ./servicios/clientes
+    container_name: repararia-servicio-clientes
+    environment:
+      DATABASE_URL: postgresql+asyncpg://repararia:repararia_dev@postgres:5432/repararia
+      TCP_HOST: 0.0.0.0
+      TCP_PORT: 5002
+    expose:
+      - "5002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - repararia-internal
+
+  servicio-ordenes:
+    build:
+      context: ./servicios/ordenes
+    container_name: repararia-servicio-ordenes
+    environment:
+      DATABASE_URL: postgresql+asyncpg://repararia:repararia_dev@postgres:5432/repararia
+      TCP_HOST: 0.0.0.0
+      TCP_PORT: 5003
+      INVENTARIO_SERVICE_HOST: servicio-inventario
+      INVENTARIO_SERVICE_PORT: 5004
+      FACTURACION_SERVICE_HOST: servicio-facturacion
+      FACTURACION_SERVICE_PORT: 5005
+    expose:
+      - "5003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      servicio-inventario:
+        condition: service_started
+      servicio-facturacion:
+        condition: service_started
+    networks:
+      - repararia-internal
+
+  servicio-inventario:
+    build:
+      context: ./servicios/inventario
+    container_name: repararia-servicio-inventario
+    environment:
+      DATABASE_URL: postgresql+asyncpg://repararia:repararia_dev@postgres:5432/repararia
+      TCP_HOST: 0.0.0.0
+      TCP_PORT: 5004
+    expose:
+      - "5004"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - repararia-internal
+
+  servicio-facturacion:
+    build:
+      context: ./servicios/facturacion
+    container_name: repararia-servicio-facturacion
+    environment:
+      DATABASE_URL: postgresql+asyncpg://repararia:repararia_dev@postgres:5432/repararia
+      TCP_HOST: 0.0.0.0
+      TCP_PORT: 5005
+    expose:
+      - "5005"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - repararia-internal
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: repararia-frontend
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api-gateway
+    networks:
+      - repararia-internal
+
+volumes:
+  postgres_data:
+  chroma_data:
+
+networks:
+  repararia-internal:
+    driver: bridge
