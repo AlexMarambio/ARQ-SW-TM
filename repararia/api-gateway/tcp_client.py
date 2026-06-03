@@ -6,10 +6,6 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-SOA_PATH = Path(__file__).resolve().parents[2] / "SOA"
-if SOA_PATH.exists():
-    sys.path.insert(0, str(SOA_PATH))
-
 from soa_lib import connect_to_bus, receive_message, send_message
 
 
