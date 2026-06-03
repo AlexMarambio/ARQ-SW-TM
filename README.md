@@ -1,4 +1,4 @@
-# ReparaIA - Proyecto CRM de talleres mecánicos
+# RepararIA - Proyecto CRM de talleres mecánicos
 
 La manera de ejecutar todo es levantando el docker compose que se encuentra en la carpeta de \repararia:
 
