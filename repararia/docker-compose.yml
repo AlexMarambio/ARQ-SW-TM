@@ -60,26 +60,26 @@ services:
     networks:
       - repararia-internal
 
-  # servicio-clientes:
-  #   build:
-  #     context: ./servicios/clientes
-  #   container_name: repararia-servicio-clientes
-  #   restart: unless-stopped
-  #   environment:
-  #     DATABASE_URL: postgresql+asyncpg://repararia:repararia_dev@postgres:5432/repararia
-  #     TCP_HOST: 0.0.0.0
-  #     TCP_PORT: 5002
-  #     BUS_HOST: bus
-  #     BUS_PORT: 5000
-  #   expose:
-  #     - "5002"
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     bus:
-  #       condition: service_healthy
-  #   networks:
-  #     - repararia-internal
+  servicio-cliente:
+    build:
+      context: ./services/cliente
+    container_name: repararia-servicio-cliente
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://repararia:repararia_dev@postgres:5432/repararia
+      TCP_HOST: 0.0.0.0
+      TCP_PORT: 5002
+      BUS_HOST: bus
+      BUS_PORT: 5000
+    expose:
+      - "5002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      bus:
+        condition: service_started
+    networks:
+      - repararia-internal
 
   # servicio-inventario:
   #   build:
@@ -153,9 +153,7 @@ services:
   #     - repararia-internal
 
   api-gateway:
-    build:
-      context: ..
-      dockerfile: repararia/api-gateway/Dockerfile
+    build: ./api-gateway
     container_name: repararia-api-gateway
     restart: unless-stopped
     environment:
