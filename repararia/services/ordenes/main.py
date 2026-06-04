@@ -4,6 +4,7 @@ import psycopg
 from datetime import datetime, date
 from decimal import Decimal
 from soa_lib import connect_to_bus, send_message, receive_message
+from auditoria_utils import registrar_auditoria
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://repararia:repararia_dev@postgres:5432/repararia")
 SERVICE_NAME = "orden"   # 5 caracteres
@@ -109,6 +110,13 @@ def handle_create_orden(payload):
         conn.commit()
         cur.execute("SELECT * FROM orden_trabajo WHERE id_orden = %s", (new_id,))
         new_orden = orden_to_dict(cur.fetchone())
+        registrar_auditoria(
+            id_usuario=id_usuario,
+            accion="CREATE",
+            entidad="orden_trabajo",
+            entidad_id=new_id,
+            detalle=f"Orden creada para el cliente ID {id_cliente}"
+        )
         return {"status": "success", "data": new_orden}
     except Exception as e:
         conn.rollback()
@@ -161,6 +169,13 @@ def handle_update_orden(payload):
         # Devolver orden actualizada
         cur.execute("SELECT * FROM orden_trabajo WHERE id_orden = %s", (orden_id,))
         updated = orden_to_dict(cur.fetchone())
+        registrar_auditoria(
+            id_usuario=id_usuario,
+            accion="UPDATE",
+            entidad="orden_trabajo",
+            entidad_id=orden_id,
+            detalle=f"Orden ID {orden_id} actualizada. Campos modificados: {', '.join(campos_actualizados)}"
+        )
         return {"status": "success", "data": updated}
     except Exception as e:
         conn.rollback()

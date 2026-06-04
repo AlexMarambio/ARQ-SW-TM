@@ -2,6 +2,7 @@ import json
 import os
 import psycopg
 from soa_lib import connect_to_bus, send_message, receive_message
+from auditoria_utils import registrar_auditoria
 
 # ================= CONFIGURACIÓN =================
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://repararia:repararia_dev@postgres:5432/repararia")
@@ -47,6 +48,8 @@ def handle_list_clientes(payload):
     return {"status": "success", "data": clientes}
 
 def handle_create_cliente(payload):
+    auth = payload.get("_auth", {}) 
+    id_usuario = auth.get("user_id") if isinstance(auth, dict) else None
     """Crea un nuevo cliente."""
     rut = payload.get("rut")
     email = payload.get("email")
@@ -75,7 +78,16 @@ def handle_create_cliente(payload):
             (new_id,)
         )
         new_cliente = cliente_to_dict(cur.fetchone())
+        registrar_auditoria(
+            id_usuario=id_usuario,
+            accion="CREATE",
+            entidad="cliente",
+            entidad_id=new_id,
+            detalle=f"Cliente creado: {nombre} (RUT: {rut})"
+        )
+
         return {"status": "success", "data": new_cliente}
+    
     except psycopg.IntegrityError as e:
         conn.rollback()
         if "cliente_rut_key" in str(e):
@@ -129,6 +141,14 @@ def handle_update_cliente(payload):
         if cur.rowcount == 0:
             return {"status": "error", "error_code": "NOT_FOUND", "error_message": "Cliente no encontrado", "status_code": 404}
         conn.commit()
+
+        registrar_auditoria(
+            id_usuario=id_usuario,
+            accion="UPDATE",
+            entidad="cliente",
+            entidad_id=cliente_id,
+            detalle=f"Cliente ID {cliente_id} actualizado. Campos modificados: {', '.join(campos_actualizados)}"
+        )
         # Obtener el cliente actualizado
         cur.execute(
             "SELECT id_cliente, rut, email, nombre, telefono, direccion, fecha_registro FROM cliente WHERE id_cliente = %s",
@@ -159,6 +179,14 @@ def handle_delete_cliente(payload):
         if cur.rowcount == 0:
             return {"status": "error", "error_code": "NOT_FOUND", "error_message": "Cliente no encontrado", "status_code": 404}
         conn.commit()
+
+        registrar_auditoria(
+            id_usuario=id_usuario,
+            accion="DELETE",
+            entidad="cliente",
+            entidad_id=cliente_id,
+            detalle=f"Cliente eliminado: {nombre} (RUT: {rut})"
+        )
         return {"status": "success", "data": {"id_cliente": cliente_id, "deleted": True}}
     except Exception as e:
         conn.rollback()

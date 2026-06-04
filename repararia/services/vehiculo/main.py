@@ -2,6 +2,7 @@ import json
 import os
 import psycopg
 from soa_lib import connect_to_bus, send_message, receive_message
+from auditoria_utils import registrar_auditoria
 
 # ================= CONFIGURACIÓN =================
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://repararia:repararia_dev@postgres:5432/repararia")
@@ -87,6 +88,14 @@ def handle_create_vehiculo(payload):
             (new_id,)
         )
         new_vehiculo = vehiculo_to_dict(cur.fetchone())
+        registrar_auditoria(
+            id_usuario=id_usuario,
+            accion="CREATE",
+            entidad="vehiculo",
+            entidad_id=new_id,
+            detalle=f"Vehículo creado: {marca} {modelo} (Patente: {patente})"
+        )
+
         return {"status": "success", "data": new_vehiculo}
     except psycopg.IntegrityError as e:
         conn.rollback()
@@ -146,6 +155,13 @@ def handle_update_vehiculo(payload):
             (vehiculo_id,)
         )
         updated = vehiculo_to_dict(cur.fetchone())
+        registrar_auditoria(
+            id_usuario=id_usuario,
+            accion="UPDATE",
+            entidad="vehiculo",
+            entidad_id=vehiculo_id,
+            detalle=f"Vehículo ID {vehiculo_id} actualizado"
+        )
         return {"status": "success", "data": updated}
     except psycopg.IntegrityError as e:
         conn.rollback()
@@ -168,6 +184,13 @@ def handle_delete_vehiculo(payload):
         if cur.rowcount == 0:
             return {"status": "error", "error_code": "NOT_FOUND", "error_message": "Vehículo no encontrado", "status_code": 404}
         conn.commit()
+        registrar_auditoria(
+            id_usuario=id_usuario,
+            accion="DELETE",
+            entidad="vehiculo",
+            entidad_id=vehiculo_id,
+            detalle=f"Vehículo eliminado: ID {vehiculo_id}"
+        )
         return {"status": "success", "data": {"id_vehiculo": vehiculo_id, "deleted": True}}
     except Exception as e:
         conn.rollback()

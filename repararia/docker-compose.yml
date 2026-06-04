@@ -173,6 +173,47 @@ services:
     networks:
       - repararia-internal
 
+  servicio-auditoria:
+    build:
+      context: ./services/auditoria
+    container_name: repararia-servicio-auditoria
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://repararia:repararia_dev@postgres:5432/repararia
+      TCP_HOST: 0.0.0.0
+      TCP_PORT: 5007
+      BUS_HOST: bus
+      BUS_PORT: 5000
+      CLIENTES_SERVICE_HOST: servicio-cliente
+      CLIENTES_SERVICE_PORT: 5002
+      VEHICULOS_SERVICE_HOST: servicio-vehiculo
+      VEHICULOS_SERVICE_PORT: 5003
+      REPUESTO_SERVICE_HOST: servicio-repuesto
+      REPUESTO_SERVICE_PORT: 5004
+      FACTURACION_SERVICE_HOST: servicio-facturacion
+      FACTURACION_SERVICE_PORT: 5005
+      ORDENES_SERVICE_HOST: servicio-ordenes
+      ORDENES_SERVICE_PORT: 5006
+    expose:
+      - "5007"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      bus:
+        condition: service_started
+      servicio-cliente:
+        condition: service_started
+      servicio-vehiculo:
+        condition: service_started
+      servicio-repuesto:
+        condition: service_started
+      servicio-facturacion:
+        condition: service_started
+      servicio-ordenes:
+        condition: service_started
+    networks:
+      - repararia-internal
+
   api-gateway:
     build: ./api-gateway
     container_name: repararia-api-gateway
@@ -187,10 +228,10 @@ services:
       AUTH_SERVICE_HOST: servicio-autenticacion
       AUTH_SERVICE_PORT: 5001
 
-      CLIENTES_SERVICE_HOST: servicio-clientes
+      CLIENTES_SERVICE_HOST: servicio-cliente
       CLIENTES_SERVICE_PORT: 5002
 
-      VEHICULOS_SERVICE_HOST: servicio-vehiculos
+      VEHICULOS_SERVICE_HOST: servicio-vehiculo
       VEHICULOS_SERVICE_PORT: 5003
 
       REPUESTO_SERVICE_HOST: servicio-repuesto
@@ -201,6 +242,9 @@ services:
 
       ORDENES_SERVICE_HOST: servicio-ordenes
       ORDENES_SERVICE_PORT: 5006
+
+      AUDITORIA_SERVICE_HOST: servicio-auditoria
+      AUDITORIA_SERVICE_PORT: 5007
 
     ports:
       - "8000:8000"

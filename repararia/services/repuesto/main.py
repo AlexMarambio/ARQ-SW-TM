@@ -2,6 +2,7 @@ import json
 import os
 import psycopg
 from soa_lib import connect_to_bus, send_message, receive_message
+from auditoria_utils import registrar_auditoria
 
 # ================= CONFIGURACIÓN =================
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://repararia:repararia_dev@postgres:5432/repararia")
@@ -73,6 +74,13 @@ def handle_create_repuesto(payload):
         # Recuperar el repuesto recién creado
         cur.execute("SELECT * FROM repuesto WHERE id_repuesto = %s", (new_id,))
         new_repuesto = repuesto_to_dict(cur.fetchone())
+        registrar_auditoria(
+            id_usuario=id_usuario,
+            accion="CREATE",
+            entidad="repuesto",
+            entidad_id=new_id,
+            detalle=f"Repuesto creado: {nombre} (SKU: {sku})"
+        )
         return {"status": "success", "data": new_repuesto}
     except psycopg.IntegrityError as e:
         conn.rollback()
@@ -124,6 +132,13 @@ def handle_update_repuesto(payload):
         # Obtener el repuesto actualizado
         cur.execute("SELECT * FROM repuesto WHERE id_repuesto = %s", (repuesto_id,))
         updated = repuesto_to_dict(cur.fetchone())
+        registrar_auditoria(
+            id_usuario=id_usuario,
+            accion="UPDATE",
+            entidad="repuesto",
+            entidad_id=repuesto_id,
+            detalle=f"Repuesto ID {repuesto_id} actualizado"
+        )
         return {"status": "success", "data": updated}
     except psycopg.IntegrityError as e:
         conn.rollback()
@@ -150,6 +165,13 @@ def handle_delete_repuesto(payload):
         if cur.rowcount == 0:
             return {"status": "error", "error_code": "NOT_FOUND", "error_message": "Repuesto no encontrado", "status_code": 404}
         conn.commit()
+        registrar_auditoria(
+            id_usuario=id_usuario,
+            accion="DELETE",
+            entidad="repuesto",
+            entidad_id=repuesto_id,
+            detalle=f"Repuesto eliminado: ID {repuesto_id}"
+        )
         return {"status": "success", "data": {"id_repuesto": repuesto_id, "deleted": True}}
     except Exception as e:
         conn.rollback()

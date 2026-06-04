@@ -4,6 +4,7 @@ import psycopg
 from datetime import datetime
 from decimal import Decimal
 from soa_lib import connect_to_bus, send_message, receive_message
+from auditoria_utils import registrar_auditoria
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://repararia:repararia_dev@postgres:5432/repararia")
 SERVICE_NAME = "factu"   # 5 caracteres
@@ -58,6 +59,14 @@ def handle_create_factura(payload):
         # Devolver la factura creada
         cur.execute("SELECT * FROM factura WHERE id_factura = %s", (factura_id,))
         new_factura = factura_to_dict(cur.fetchone())
+
+        registrar_auditoria(
+            id_usuario=id_usuario,
+            accion="CREATE",
+            entidad="factura",
+            entidad_id=factura_id,
+            detalle=f"Factura creada para la orden ID {id_orden}"
+        )
         return {"status": "success", "data": new_factura}
     except Exception as e:
         conn.rollback()
@@ -86,6 +95,15 @@ def handle_registrar_pago(payload):
             (metodo_pago, id_factura)
         )
         conn.commit()
+
+        registrar_auditoria(
+            id_usuario=id_usuario,
+            accion="UPDATE",
+            entidad="factura",
+            entidad_id=id_factura,
+            detalle=f"Factura ID {id_factura} actualizada. Estado: pagado, Método de pago: {metodo_pago}"
+        )
+
         return {"status": "success", "data": {"id_factura": id_factura, "estado_pago": "pagado", "metodo_pago": metodo_pago}}
     except Exception as e:
         conn.rollback()
