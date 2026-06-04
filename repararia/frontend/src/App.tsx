@@ -9,9 +9,17 @@ import DashboardPage from "./pages/Dashboard";
 import OrdenesPage from "./pages/Ordenes";
 import ConsultaPublicaPage from "./pages/ConsultaPublica";
 
+// 
+// import ClientesPage from "./pages/Clientes";
+// import VehiculosPage from "./pages/Vehiculos";
+// import InventarioPage from "./pages/Inventario";
+// import ReportesPage from "./pages/Reportes";
+
+
 type Session = {
   userId: number;
-  rol: LoginResponse["rol"];
+  rol: LoginResponse["user"]["rol"];
+  nombre: string;
 };
 
 type View = "dashboard" | "ordenes" | "publica";
@@ -31,7 +39,7 @@ export default function App() {
 
   async function handleLogin(data: LoginResponse) {
     setAccessToken(data.token);
-    setSession({ userId: data.user_id, rol: data.rol });
+    setSession({ userId: data.user.id, rol: data.user.rol, nombre: data.user.nombre });
     setView("dashboard");
   }
 

@@ -51,10 +51,20 @@ export async function apiRequest<T>(
   return data as T;
 }
 
+// Parametros para API
+
+export type UserInfo = {
+  "id": number;
+  "nombre": string; 
+  "email": string;
+  "rol": "administrador" | "mecanico" | "sysadmin";
+};
+
 export type LoginResponse = {
   token: string;
-  user_id: number;
-  rol: "administrador" | "mecanico" | "sysadmin";
+  user: UserInfo;
+  //user_id: number;
+  //rol: "administrador" | "mecanico" | "sysadmin";
 };
 
 export type Orden = {

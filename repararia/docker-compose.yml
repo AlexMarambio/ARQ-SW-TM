@@ -230,9 +230,13 @@ services:
     container_name: repararia-frontend
     restart: unless-stopped
     environment:
-      VITE_API_BASE_URL: http://api-gateway:8000
+      #VITE_API_BASE_URL: http://api-gateway:8000
+      VITE_API_BASE_URL: http://localhost:8000
     ports:
       - "5173:5173"
+    volumes: # PRUEBA
+      - ./frontend:/app
+      - /app/node_modules  
     depends_on:
       - api-gateway
     networks:

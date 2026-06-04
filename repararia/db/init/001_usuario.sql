@@ -23,3 +23,6 @@ VALUES (
     TRUE
 )
 ON CONFLICT (email) DO NOTHING;
+
+
+select * from usuario;
