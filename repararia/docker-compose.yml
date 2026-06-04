@@ -81,6 +81,27 @@ services:
     networks:
       - repararia-internal
 
+  servicio-vehiculo:
+    build:
+      context: ./services/vehiculo
+    container_name: repararia-servicio-vehiculo
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://repararia:repararia_dev@postgres:5432/repararia
+      TCP_HOST: 0.0.0.0
+      TCP_PORT: 5003
+      BUS_HOST: bus
+      BUS_PORT: 5000
+    expose:
+      - "5003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      bus:
+        condition: service_started
+    networks:
+      - repararia-internal
+
   # servicio-inventario:
   #   build:
   #     context: ./servicios/inventario
@@ -169,14 +190,17 @@ services:
       CLIENTES_SERVICE_HOST: servicio-clientes
       CLIENTES_SERVICE_PORT: 5002
 
+      VEHICULOS_SERVICE_HOST: servicio-vehiculos
+      VEHICULOS_SERVICE_PORT: 5003
+
       ORDENES_SERVICE_HOST: servicio-ordenes
-      ORDENES_SERVICE_PORT: 5003
+      ORDENES_SERVICE_PORT: 5004
 
       INVENTARIO_SERVICE_HOST: servicio-inventario
-      INVENTARIO_SERVICE_PORT: 5004
+      INVENTARIO_SERVICE_PORT: 5005
 
       FACTURACION_SERVICE_HOST: servicio-facturacion
-      FACTURACION_SERVICE_PORT: 5005
+      FACTURACION_SERVICE_PORT: 5006
     ports:
       - "8000:8000"
     depends_on:
@@ -186,8 +210,10 @@ services:
         condition: service_started
       servicio-autenticacion:
         condition: service_started
-      # servicio-clientes:
-      #   condition: service_started
+      servicio-cliente:
+        condition: service_started
+      servicio-vehiculo:
+        condition: service_started
       # servicio-ordenes:
       #   condition: service_started
       # servicio-inventario:

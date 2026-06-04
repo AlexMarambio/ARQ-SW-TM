@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers.auth import router as auth_router
 from routers.cliente import router as cliente_router
+from routers.vehiculo import router as vehiculo_router
 
 app = FastAPI(title="RepararIA-API", version="1.0.0")
 
@@ -16,7 +17,7 @@ app.add_middleware(
 # Incluir routers
 app.include_router(auth_router)
 app.include_router(cliente_router)
-# app.include_router(vehiculos.router)  etc.
+app.include_router(vehiculo_router)
 
 @app.get("/health")
 def health():
