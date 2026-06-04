@@ -102,76 +102,76 @@ services:
     networks:
       - repararia-internal
 
-  # servicio-inventario:
-  #   build:
-  #     context: ./servicios/inventario
-  #   container_name: repararia-servicio-inventario
-  #   restart: unless-stopped
-  #   environment:
-  #     DATABASE_URL: postgresql+asyncpg://repararia:repararia_dev@postgres:5432/repararia
-  #     TCP_HOST: 0.0.0.0
-  #     TCP_PORT: 5004
-  #     BUS_HOST: bus
-  #     BUS_PORT: 5000
-  #   expose:
-  #     - "5004"
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     bus:
-  #       condition: service_healthy
-  #   networks:
-  #     - repararia-internal
+  servicio-repuesto:
+    build:
+      context: ./services/repuesto
+    container_name: repararia-servicio-repuesto
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://repararia:repararia_dev@postgres:5432/repararia
+      TCP_HOST: 0.0.0.0
+      TCP_PORT: 5004
+      BUS_HOST: bus
+      BUS_PORT: 5000
+    expose:
+      - "5004"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      bus:
+        condition: service_started
+    networks:
+      - repararia-internal
 
-  # servicio-facturacion:
-  #   build:
-  #     context: ./servicios/facturacion
-  #   container_name: repararia-servicio-facturacion
-  #   restart: unless-stopped
-  #   environment:
-  #     DATABASE_URL: postgresql+asyncpg://repararia:repararia_dev@postgres:5432/repararia
-  #     TCP_HOST: 0.0.0.0
-  #     TCP_PORT: 5005
-  #     BUS_HOST: bus
-  #     BUS_PORT: 5000
-  #   expose:
-  #     - "5005"
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     bus:
-  #       condition: service_healthy
-  #   networks:
-  #     - repararia-internal
+  servicio-facturacion:
+    build:
+      context: ./services/facturacion
+    container_name: repararia-servicio-facturacion
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://repararia:repararia_dev@postgres:5432/repararia
+      TCP_HOST: 0.0.0.0
+      TCP_PORT: 5005
+      BUS_HOST: bus
+      BUS_PORT: 5000
+    expose:
+      - "5005"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      bus:
+        condition: service_started
+    networks:
+      - repararia-internal
 
-  # servicio-ordenes:
-  #   build:
-  #     context: ./servicios/ordenes
-  #   container_name: repararia-servicio-ordenes
-  #   restart: unless-stopped
-  #   environment:
-  #     DATABASE_URL: postgresql+asyncpg://repararia:repararia_dev@postgres:5432/repararia
-  #     TCP_HOST: 0.0.0.0
-  #     TCP_PORT: 5003
-  #     BUS_HOST: bus
-  #     BUS_PORT: 5000
-  #     INVENTARIO_SERVICE_HOST: servicio-inventario
-  #     INVENTARIO_SERVICE_PORT: 5004
-  #     FACTURACION_SERVICE_HOST: servicio-facturacion
-  #     FACTURACION_SERVICE_PORT: 5005
-  #   expose:
-  #     - "5003"
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     bus:
-  #       condition: service_healthy
-  #     servicio-inventario:
-  #       condition: service_started
-  #     servicio-facturacion:
-  #       condition: service_started
-  #   networks:
-  #     - repararia-internal
+  servicio-ordenes:
+    build:
+      context: ./services/ordenes
+    container_name: repararia-servicio-ordenes
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://repararia:repararia_dev@postgres:5432/repararia
+      TCP_HOST: 0.0.0.0
+      TCP_PORT: 5006
+      BUS_HOST: bus
+      BUS_PORT: 5000
+      REPUESTO_SERVICE_HOST: servicio-repuesto
+      REPUESTO_SERVICE_PORT: 5004
+      FACTURACION_SERVICE_HOST: servicio-facturacion
+      FACTURACION_SERVICE_PORT: 5005
+    expose:
+      - "5006"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      bus:
+        condition: service_started
+      servicio-repuesto:
+        condition: service_started
+      servicio-facturacion:
+        condition: service_started
+    networks:
+      - repararia-internal
 
   api-gateway:
     build: ./api-gateway
@@ -193,14 +193,15 @@ services:
       VEHICULOS_SERVICE_HOST: servicio-vehiculos
       VEHICULOS_SERVICE_PORT: 5003
 
-      ORDENES_SERVICE_HOST: servicio-ordenes
-      ORDENES_SERVICE_PORT: 5004
-
-      INVENTARIO_SERVICE_HOST: servicio-inventario
-      INVENTARIO_SERVICE_PORT: 5005
+      REPUESTO_SERVICE_HOST: servicio-repuesto
+      REPUESTO_SERVICE_PORT: 5004
 
       FACTURACION_SERVICE_HOST: servicio-facturacion
-      FACTURACION_SERVICE_PORT: 5006
+      FACTURACION_SERVICE_PORT: 5005
+
+      ORDENES_SERVICE_HOST: servicio-ordenes
+      ORDENES_SERVICE_PORT: 5006
+
     ports:
       - "8000:8000"
     depends_on:
@@ -214,12 +215,12 @@ services:
         condition: service_started
       servicio-vehiculo:
         condition: service_started
-      # servicio-ordenes:
-      #   condition: service_started
-      # servicio-inventario:
-      #   condition: service_started
-      # servicio-facturacion:
-      #   condition: service_started
+      servicio-repuesto:
+        condition: service_started
+      servicio-facturacion:
+        condition: service_started
+      servicio-ordenes:
+        condition: service_started
     networks:
       - repararia-internal
 
