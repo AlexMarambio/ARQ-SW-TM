@@ -29,6 +29,25 @@ services:
     networks:
       - repararia-internal
 
+  # Agrega esto a tu docker-compose existente
+
+  ia-service:
+    build:
+      context: ./services/ia
+      dockerfile: Dockerfile
+    container_name: repararia-ia
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      - OPENAI_API_KEY=${GROQ_API_KEY}
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
+    depends_on:
+      - chromadb
+    networks:
+      - repararia-internal
+
   bus:
     image: jrgiadach/soabus:v1
     container_name: repararia-bus
@@ -236,7 +255,7 @@ services:
       - "5173:5173"
     volumes: # PRUEBA
       - ./frontend:/app
-      - /app/node_modules  
+      - /app/node_modules
     depends_on:
       - api-gateway
     networks:
