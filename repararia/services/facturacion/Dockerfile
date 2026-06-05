@@ -10,5 +10,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY soa_lib.py .
 COPY main.py .
+COPY auditoria_utils.py .
 
 CMD ["python", "main.py"]
