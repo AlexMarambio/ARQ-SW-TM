@@ -4,35 +4,33 @@ import psycopg
 from soa_lib import connect_to_bus, send_message, receive_message
 from auditoria_utils import registrar_auditoria
 
-# ================= CONFIGURACIÓN =================
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://repararia:repararia_dev@postgres:5432/repararia")
-SERVICE_NAME = "inven"   # 5 caracteres
+SERVICE_NAME = "inven"
 
-# ================= FUNCIONES BASE =================
 def get_db_connection():
     return psycopg.connect(DATABASE_URL)
 
 def repuesto_to_dict(row):
-    """Convierte una fila de repuesto en diccionario."""
+    """Convierte una fila de repuesto en diccionario (con nueva estructura)."""
     return {
         "id_repuesto": row[0],
         "nombre": row[1],
         "descripcion": row[2],
         "sku": row[3],
-        "stock": row[4],
-        "precio_unitario": float(row[5]) if row[5] else 0.0
+        "stock_actual": row[4],
+        "stock_minimo": row[5],
+        "precio_unitario": float(row[6]) if row[6] else 0.0,
+        "proveedor": row[7]
     }
 
-# ================= MANEJADORES =================
 def handle_list_repuestos(payload):
-    """Lista repuestos con paginación y filtros."""
     limit = int(payload.get("limit", 100))
     offset = int(payload.get("offset", 0))
     search = payload.get("search", "")
     conn = get_db_connection()
     cur = conn.cursor()
     query = """
-        SELECT id_repuesto, nombre, descripcion, sku, stock, precio_unitario
+        SELECT id_repuesto, nombre, descripcion, sku, stock_actual, stock_minimo, precio_unitario, proveedor
         FROM repuesto
         WHERE (nombre ILIKE %s OR sku ILIKE %s)
         ORDER BY id_repuesto
@@ -47,42 +45,32 @@ def handle_list_repuestos(payload):
     return {"status": "success", "data": repuestos}
 
 def handle_create_repuesto(payload):
-    """Crea un nuevo repuesto."""
-    auth = payload.get("auth") or payload.get("_auth") or {}
-    id_usuario = auth.get("user_id") if isinstance(auth, dict) else None
+    auth = payload.get("auth") or {}
+    id_usuario = auth.get("user_id")
     nombre = payload.get("nombre")
     descripcion = payload.get("descripcion")
     sku = payload.get("sku")
-    stock = payload.get("stock", 0)
-    precio_unitario = payload.get("precio_unitario", 0)
+    stock_actual = payload.get("stock_actual", 0)
+    stock_minimo = payload.get("stock_minimo", 5)
+    precio_unitario = payload.get("precio_unitario", 0.0)
+    proveedor = payload.get("proveedor")
     
     if not nombre or not sku:
-        return {
-            "status": "error",
-            "error_code": "VALIDATION_ERROR",
-            "error_message": "Faltan nombre o sku",
-            "status_code": 400
-        }
+        return {"status": "error", "error_code": "VALIDATION_ERROR", "error_message": "Faltan nombre o sku", "status_code": 400}
+    
     conn = get_db_connection()
     cur = conn.cursor()
     try:
         cur.execute(
-            "INSERT INTO repuesto (nombre, descripcion, sku, stock, precio_unitario) "
-            "VALUES (%s, %s, %s, %s, %s) RETURNING id_repuesto",
-            (nombre, descripcion, sku, stock, precio_unitario)
+            """INSERT INTO repuesto (nombre, descripcion, sku, stock_actual, stock_minimo, precio_unitario, proveedor)
+               VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id_repuesto""",
+            (nombre, descripcion, sku, stock_actual, stock_minimo, precio_unitario, proveedor)
         )
         new_id = cur.fetchone()[0]
         conn.commit()
-        # Recuperar el repuesto recién creado
         cur.execute("SELECT * FROM repuesto WHERE id_repuesto = %s", (new_id,))
         new_repuesto = repuesto_to_dict(cur.fetchone())
-        registrar_auditoria(
-            id_usuario=id_usuario,
-            accion="CREATE",
-            entidad="repuesto",
-            entidad_id=new_id,
-            detalle=f"Repuesto creado: {nombre} (SKU: {sku})"
-        )
+        registrar_auditoria(id_usuario, "CREATE", "repuesto", new_id, f"Repuesto creado: {nombre} (SKU: {sku})")
         return {"status": "success", "data": new_repuesto}
     except psycopg.IntegrityError as e:
         conn.rollback()
@@ -94,7 +82,6 @@ def handle_create_repuesto(payload):
         conn.close()
 
 def handle_get_repuesto(payload):
-    """Obtiene un repuesto por ID."""
     repuesto_id = payload.get("id_repuesto")
     if not repuesto_id:
         return {"status": "error", "error_code": "VALIDATION_ERROR", "error_message": "Se requiere id_repuesto", "status_code": 400}
@@ -109,13 +96,12 @@ def handle_get_repuesto(payload):
     return {"status": "success", "data": repuesto_to_dict(row)}
 
 def handle_update_repuesto(payload):
-    """Actualiza un repuesto."""
-    auth = payload.get("auth") or payload.get("_auth") or {}
-    id_usuario = auth.get("user_id") if isinstance(auth, dict) else None
+    auth = payload.get("auth") or {}
+    id_usuario = auth.get("user_id")
     repuesto_id = payload.get("id_repuesto")
     if not repuesto_id:
         return {"status": "error", "error_code": "VALIDATION_ERROR", "error_message": "Se requiere id_repuesto", "status_code": 400}
-    allowed_fields = ["nombre", "descripcion", "sku", "stock", "precio_unitario"]
+    allowed_fields = ["nombre", "descripcion", "sku", "stock_actual", "stock_minimo", "precio_unitario", "proveedor"]
     updates = []
     values = []
     for field in allowed_fields:
@@ -133,16 +119,9 @@ def handle_update_repuesto(payload):
         if cur.rowcount == 0:
             return {"status": "error", "error_code": "NOT_FOUND", "error_message": "Repuesto no encontrado", "status_code": 404}
         conn.commit()
-        # Obtener el repuesto actualizado
         cur.execute("SELECT * FROM repuesto WHERE id_repuesto = %s", (repuesto_id,))
         updated = repuesto_to_dict(cur.fetchone())
-        registrar_auditoria(
-            id_usuario=id_usuario,
-            accion="UPDATE",
-            entidad="repuesto",
-            entidad_id=repuesto_id,
-            detalle=f"Repuesto ID {repuesto_id} actualizado"
-        )
+        registrar_auditoria(id_usuario, "UPDATE", "repuesto", repuesto_id, f"Repuesto ID {repuesto_id} actualizado")
         return {"status": "success", "data": updated}
     except psycopg.IntegrityError as e:
         conn.rollback()
@@ -154,16 +133,14 @@ def handle_update_repuesto(payload):
         conn.close()
 
 def handle_delete_repuesto(payload):
-    """Elimina un repuesto (solo si no está asociado a órdenes)."""
-    auth = payload.get("auth") or payload.get("_auth") or {}
-    id_usuario = auth.get("user_id") if isinstance(auth, dict) else None
+    auth = payload.get("auth") or {}
+    id_usuario = auth.get("user_id")
     repuesto_id = payload.get("id_repuesto")
     if not repuesto_id:
         return {"status": "error", "error_code": "VALIDATION_ERROR", "error_message": "Se requiere id_repuesto", "status_code": 400}
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        # Verificar si está asociado a alguna orden
         cur.execute("SELECT id_orden FROM orden_repuesto WHERE id_repuesto = %s LIMIT 1", (repuesto_id,))
         if cur.fetchone():
             return {"status": "error", "error_code": "CONFLICT", "error_message": "El repuesto está asociado a órdenes", "status_code": 409}
@@ -171,13 +148,7 @@ def handle_delete_repuesto(payload):
         if cur.rowcount == 0:
             return {"status": "error", "error_code": "NOT_FOUND", "error_message": "Repuesto no encontrado", "status_code": 404}
         conn.commit()
-        registrar_auditoria(
-            id_usuario=id_usuario,
-            accion="DELETE",
-            entidad="repuesto",
-            entidad_id=repuesto_id,
-            detalle=f"Repuesto eliminado: ID {repuesto_id}"
-        )
+        registrar_auditoria(id_usuario, "DELETE", "repuesto", repuesto_id, f"Repuesto eliminado ID {repuesto_id}")
         return {"status": "success", "data": {"id_repuesto": repuesto_id, "deleted": True}}
     except Exception as e:
         conn.rollback()
@@ -187,23 +158,22 @@ def handle_delete_repuesto(payload):
         conn.close()
 
 def handle_get_alertas_stock(payload):
-    """Lista repuestos con stock bajo el umbral."""
     umbral = int(payload.get("umbral", 5))
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute(
-        "SELECT id_repuesto, nombre, sku, stock FROM repuesto WHERE stock < %s ORDER BY stock ASC",
+        "SELECT id_repuesto, nombre, sku, stock_actual FROM repuesto WHERE stock_actual < %s ORDER BY stock_actual ASC",
         (umbral,)
     )
     rows = cur.fetchall()
     cur.close()
     conn.close()
-    alertas = [{"id_repuesto": r[0], "nombre": r[1], "sku": r[2], "stock": r[3]} for r in rows]
+    alertas = [{"id_repuesto": r[0], "nombre": r[1], "sku": r[2], "stock_actual": r[3]} for r in rows]
     return {"status": "success", "data": alertas}
 
 def handle_ajustar_stock(payload):
-    auth = payload.get("auth") or payload.get("_auth") or {}
-    id_usuario = auth.get("user_id") if isinstance(auth, dict) else None
+    auth = payload.get("auth") or {}
+    id_usuario = auth.get("user_id")
     repuesto_id = payload.get("id_repuesto")
     nuevo_stock = payload.get("nuevo_stock")
     if not repuesto_id or nuevo_stock is None:
@@ -211,17 +181,11 @@ def handle_ajustar_stock(payload):
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        cur.execute("UPDATE repuesto SET stock = %s WHERE id_repuesto = %s RETURNING id_repuesto", (nuevo_stock, repuesto_id))
+        cur.execute("UPDATE repuesto SET stock_actual = %s WHERE id_repuesto = %s RETURNING id_repuesto", (nuevo_stock, repuesto_id))
         if cur.rowcount == 0:
             return {"status": "error", "error_code": "NOT_FOUND", "error_message": "Repuesto no encontrado", "status_code": 404}
         conn.commit()
-        registrar_auditoria(
-            id_usuario=id_usuario,
-            accion="AJUSTAR_STOCK",
-            entidad="repuesto",
-            entidad_id=repuesto_id,
-            detalle=f"Stock ajustado para repuesto ID {repuesto_id}. Nuevo stock: {nuevo_stock}")
-
+        registrar_auditoria(id_usuario, "AJUSTAR_STOCK", "repuesto", repuesto_id, f"Nuevo stock: {nuevo_stock}")
         return {"status": "success", "data": {"id_repuesto": repuesto_id, "nuevo_stock": nuevo_stock}}
     except Exception as e:
         conn.rollback()
@@ -231,7 +195,6 @@ def handle_ajustar_stock(payload):
         conn.close()
 
 def handle_get_by_sku(payload):
-    """Busca repuesto por SKU."""
     sku = payload.get("sku")
     if not sku:
         return {"status": "error", "error_code": "VALIDATION_ERROR", "error_message": "Se requiere sku", "status_code": 400}
@@ -245,43 +208,34 @@ def handle_get_by_sku(payload):
         return {"status": "error", "error_code": "NOT_FOUND", "error_message": "Repuesto no encontrado", "status_code": 404}
     return {"status": "success", "data": repuesto_to_dict(row)}
 
-# ================= BUCLE PRINCIPAL =================
+# ================= BUCLE PRINCIPAL ================= (sin cambios estructurales, solo usar payload["auth"])
 def main():
     BUS_HOST = os.getenv("BUS_HOST", "localhost")
     BUS_PORT = int(os.getenv("BUS_PORT", "5000"))
     sock = connect_to_bus(BUS_HOST, BUS_PORT)
-
     send_message(sock, "sinit", SERVICE_NAME)
     init_resp = receive_message(sock)
     print(f"Registro del servicio '{SERVICE_NAME}': {init_resp.decode() if init_resp else 'None'}")
-
-    print(f"Servicio '{SERVICE_NAME}' escuchando en el bus...")
     while True:
         try:
             raw = receive_message(sock)
             if not raw:
-                print("Conexión con el bus perdida. Reintentando...")
                 break
             service_name_received = raw[:5].decode().strip()
             if service_name_received != SERVICE_NAME:
-                print(f"Mensaje para otro servicio: {service_name_received}, ignorando.")
                 continue
             payload_bytes = raw[5:]
             if not payload_bytes:
-                print("Payload vacío")
                 continue
             req = json.loads(payload_bytes.decode('utf-8'))
             operation = req.get("operation")
             payload = req.get("payload", {})
             request_id = req.get("request_id")
-            auth = req.get("auth", {}) 
-
-            print(f"Operación: {operation}, request_id: {request_id}")
-
+            auth = req.get("auth", {})
             if operation == "LIST_REPUESTOS":
                 result = handle_list_repuestos(payload)
             elif operation == "CREATE_REPUESTO":
-                payload["auth"] = auth    
+                payload["auth"] = auth
                 result = handle_create_repuesto(payload)
             elif operation == "GET_REPUESTO":
                 result = handle_get_repuesto(payload)
@@ -299,24 +253,14 @@ def main():
             elif operation == "GET_REPUESTO_BY_SKU":
                 result = handle_get_by_sku(payload)
             else:
-                result = {
-                    "status": "error",
-                    "error_code": "OPERATION_NOT_FOUND",
-                    "error_message": f"Operación '{operation}' no soportada",
-                    "status_code": 400
-                }
-
+                result = {"status": "error", "error_code": "OPERATION_NOT_FOUND", "error_message": f"Operación '{operation}' no soportada", "status_code": 400}
             if request_id:
                 result["request_id"] = request_id
-
             send_message(sock, SERVICE_NAME, json.dumps(result))
-            print(f"Respuesta enviada para {operation}")
-
         except Exception as e:
-            print(f"Error en bucle principal: {e}")
+            print(f"Error: {e}")
             try:
-                error_resp = {"status": "error", "error_code": "INTERNAL_SERVER_ERROR", "error_message": str(e)}
-                send_message(sock, SERVICE_NAME, json.dumps(error_resp))
+                send_message(sock, SERVICE_NAME, json.dumps({"status": "error", "error_message": str(e)}))
             except:
                 pass
 

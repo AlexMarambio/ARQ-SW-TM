@@ -214,6 +214,27 @@ services:
     networks:
       - repararia-internal
 
+  servicio-dashboard:
+    build:
+      context: ./services/dashboard
+    container_name: repararia-servicio-dashboard
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://repararia:repararia_dev@postgres:5432/repararia
+      TCP_HOST: 0.0.0.0
+      TCP_PORT: 5008
+      BUS_HOST: bus
+      BUS_PORT: 5000
+    expose:
+      - "5008"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      bus:
+        condition: service_started
+    networks:
+      - repararia-internal
+
   api-gateway:
     build: ./api-gateway
     container_name: repararia-api-gateway
@@ -246,6 +267,8 @@ services:
       AUDITORIA_SERVICE_HOST: servicio-auditoria
       AUDITORIA_SERVICE_PORT: 5007
 
+      DASHBOARD_SERVICE_HOST: servicio-dashboard
+      DASHBOARD_SERVICE_PORT: 5008
     ports:
       - "8000:8000"
     depends_on:
@@ -264,6 +287,10 @@ services:
       servicio-facturacion:
         condition: service_started
       servicio-ordenes:
+        condition: service_started
+      servicio-auditoria:
+        condition: service_started
+      servicio-dashboard:
         condition: service_started
     networks:
       - repararia-internal
