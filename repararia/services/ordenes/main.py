@@ -77,6 +77,8 @@ def handle_list_ordenes(payload):
 
 def handle_create_orden(payload):
     # Campos requeridos: id_cliente, id_vehiculo, descripcion_problema
+    auth = payload.get("auth") or {}
+    id_usuario = auth.get("user_id") if isinstance(auth, dict) else None
     id_cliente = payload.get("id_cliente")
     id_vehiculo = payload.get("id_vehiculo")
     id_mecanico = payload.get("id_mecanico")  # opcional
@@ -146,15 +148,19 @@ def handle_get_orden(payload):
 
 def handle_update_orden(payload):
     orden_id = payload.get("id_orden")
+    auth = payload.get("auth") or {}
+    id_usuario = auth.get("user_id") if isinstance(auth, dict) else None
     if not orden_id:
         return {"status": "error", "error_code": "VALIDATION_ERROR", "error_message": "Se requiere id_orden", "status_code": 400}
     allowed_fields = ["id_mecanico", "fecha_estimada", "diagnostico", "trabajos_realizados", "estado", "observaciones"]
     updates = []
     values = []
+    campos_actualizados = []
     for field in allowed_fields:
         if field in payload:
             updates.append(f"{field} = %s")
             values.append(payload[field])
+            campos_actualizados.append(field)
     if not updates:
         return {"status": "error", "error_code": "VALIDATION_ERROR", "error_message": "No hay campos para actualizar", "status_code": 400}
     values.append(orden_id)
@@ -185,6 +191,8 @@ def handle_update_orden(payload):
         conn.close()
 
 def handle_agregar_repuesto(payload):
+    auth = payload.get("auth") or {}
+    id_usuario = auth.get("user_id") if isinstance(auth, dict) else None
     orden_id = payload.get("id_orden")
     repuesto_id = payload.get("id_repuesto")
     cantidad = payload.get("cantidad")
@@ -220,6 +228,14 @@ def handle_agregar_repuesto(payload):
         total_repuestos = cur.fetchone()[0]
         cur.execute("UPDATE orden_trabajo SET costo_total = %s WHERE id_orden = %s", (total_repuestos, orden_id))
         conn.commit()
+        registrar_auditoria(
+            id_usuario=id_usuario,
+            accion="ADD_REPUESTO",
+            entidad="orden_trabajo",
+            entidad_id=orden_id,
+            detalle=f"Repuesto ID {repuesto_id} agregado a orden ID {orden_id}, cantidad {cantidad}"
+        )
+
         return {"status": "success", "data": {"id_orden": orden_id, "id_repuesto": repuesto_id, "cantidad": cantidad, "precio_unitario_momento": float(precio)}}
     except psycopg.IntegrityError as e:
         conn.rollback()
@@ -231,6 +247,8 @@ def handle_agregar_repuesto(payload):
         conn.close()
 
 def handle_cerrar_orden(payload):
+    auth = payload.get("auth") or {}
+    id_usuario = auth.get("user_id") if isinstance(auth, dict) else None
     orden_id = payload.get("id_orden")
     if not orden_id:
         return {"status": "error", "error_code": "VALIDATION_ERROR", "error_message": "Se requiere id_orden", "status_code": 400}
@@ -259,6 +277,13 @@ def handle_cerrar_orden(payload):
         )
         factura_id = cur.fetchone()[0]
         conn.commit()
+        registrar_auditoria(
+            id_usuario=id_usuario,
+            accion="CERRAR_ORDEN",
+            entidad="orden_trabajo",
+            entidad_id=orden_id,
+            detalle=f"Orden ID {orden_id} cerrada. Se generó factura ID {factura_id} por monto {costo_total}"
+        )
         return {"status": "success", "data": {"id_orden": orden_id, "estado": "entregado", "id_factura": factura_id, "costo_total": float(costo_total)}}
     except Exception as e:
         conn.rollback()
@@ -268,6 +293,8 @@ def handle_cerrar_orden(payload):
         conn.close()
 
 def handle_cambiar_estado(payload):
+    auth = payload.get("auth") or {}
+    id_usuario = auth.get("user_id") if isinstance(auth, dict) else None
     orden_id = payload.get("id_orden")
     nuevo_estado = payload.get("estado")
     if not orden_id or not nuevo_estado:
@@ -282,6 +309,13 @@ def handle_cambiar_estado(payload):
         if cur.rowcount == 0:
             return {"status": "error", "error_code": "NOT_FOUND", "error_message": "Orden no encontrada", "status_code": 404}
         conn.commit()
+        registrar_auditoria(
+            id_usuario=id_usuario,
+            accion="CAMBIAR_ESTADO",
+            entidad="orden_trabajo",
+            entidad_id=orden_id,
+            detalle=f"Estado de orden ID {orden_id} cambiado a {nuevo_estado}")
+
         return {"status": "success", "data": {"id_orden": orden_id, "estado": nuevo_estado}}
     except Exception as e:
         conn.rollback()
@@ -339,20 +373,26 @@ def main():
             operation = req.get("operation")
             payload = req.get("payload", {})
             request_id = req.get("request_id")
+            auth = req.get("auth", {})  
             print(f"Operación: {operation}, request_id: {request_id}")
             if operation == "LIST_ORDENES":
                 result = handle_list_ordenes(payload)
             elif operation == "CREATE_ORDEN":
+                payload["auth"] = auth
                 result = handle_create_orden(payload)
             elif operation == "GET_ORDEN":
                 result = handle_get_orden(payload)
             elif operation == "UPDATE_ORDEN":
+                payload["auth"] = auth
                 result = handle_update_orden(payload)
             elif operation == "AGREGAR_REPUESTO":
+                payload["auth"] = auth
                 result = handle_agregar_repuesto(payload)
             elif operation == "CERRAR_ORDEN":
+                payload["auth"] = auth
                 result = handle_cerrar_orden(payload)
             elif operation == "CAMBIAR_ESTADO":
+                payload["auth"] = auth
                 result = handle_cambiar_estado(payload)
             elif operation == "GET_ORDEN_PUBLICA":
                 result = handle_publica_orden(payload)

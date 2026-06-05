@@ -4,6 +4,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY soa_lib.py .
 COPY call_service.py .
+COPY auth_dependency.py .
 COPY main.py .
 COPY routers/ ./routers/
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

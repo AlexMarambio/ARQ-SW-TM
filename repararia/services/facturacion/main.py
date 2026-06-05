@@ -28,6 +28,8 @@ def handle_create_factura(payload):
     Crea una factura a partir de una orden cerrada.
     Se espera que la orden exista y tenga estado 'entregado' o similar.
     """
+    auth = payload.get("auth") or {}
+    id_usuario = auth.get("user_id") if isinstance(auth, dict) else None
     id_orden = payload.get("id_orden")
     if not id_orden:
         return {"status": "error", "error_code": "VALIDATION_ERROR", "error_message": "Se requiere id_orden", "status_code": 400}
@@ -77,6 +79,8 @@ def handle_create_factura(payload):
 
 def handle_registrar_pago(payload):
     """Registra el pago de una factura."""
+    auth = payload.get("auth") or {}
+    id_usuario = auth.get("user_id") if isinstance(auth, dict) else None
     id_factura = payload.get("id_factura")
     metodo_pago = payload.get("metodo_pago")   # 'efectivo', 'transferencia', 'tarjeta'
     if not id_factura or not metodo_pago:
@@ -228,10 +232,12 @@ def main():
             operation = req.get("operation")
             payload = req.get("payload", {})
             request_id = req.get("request_id")
+            auth = req.get("auth", {})  
 
             print(f"Operación: {operation}, request_id: {request_id}")
 
             if operation == "CREATE_FACTURA":
+                payload["auth"] = auth
                 result = handle_create_factura(payload)
             elif operation == "REGISTRAR_PAGO":
                 result = handle_registrar_pago(payload)
@@ -240,6 +246,7 @@ def main():
             elif operation == "GET_FACTURA":
                 result = handle_get_factura(payload)
             elif operation == "FACTURA_BY_ORDEN":
+                payload["auth"] = auth
                 result = handle_factura_by_orden(payload)
             elif operation == "REPORTE_INGRESOS":
                 result = handle_reporte_ingresos(payload)

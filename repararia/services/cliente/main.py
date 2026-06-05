@@ -48,8 +48,8 @@ def handle_list_clientes(payload):
     return {"status": "success", "data": clientes}
 
 def handle_create_cliente(payload):
-    auth = payload.get("_auth", {}) 
-    id_usuario = auth.get("user_id") if isinstance(auth, dict) else None
+    auth = payload.get("auth") or {}
+    id_usuario = auth.get("user_id")
     """Crea un nuevo cliente."""
     rut = payload.get("rut")
     email = payload.get("email")
@@ -119,6 +119,8 @@ def handle_get_cliente(payload):
 
 def handle_update_cliente(payload):
     """Actualiza un cliente existente."""
+    auth = payload.get("auth") or {}
+    id_usuario = auth.get("user_id")
     cliente_id = payload.get("id_cliente")
     if not cliente_id:
         return {"status": "error", "error_code": "VALIDATION_ERROR", "error_message": "Se requiere id_cliente", "status_code": 400}
@@ -126,10 +128,12 @@ def handle_update_cliente(payload):
     allowed_fields = ["rut", "email", "nombre", "telefono", "direccion"]
     updates = []
     values = []
+    campos_actualizados = []
     for field in allowed_fields:
         if field in payload:
             updates.append(f"{field} = %s")
             values.append(payload[field])
+            campos_actualizados.append(field)
     if not updates:
         return {"status": "error", "error_code": "VALIDATION_ERROR", "error_message": "No hay campos para actualizar", "status_code": 400}
     values.append(cliente_id)
@@ -169,16 +173,22 @@ def handle_update_cliente(payload):
 
 def handle_delete_cliente(payload):
     """Elimina (borrado físico) un cliente. Ojo: eliminará en cascada sus vehículos y órdenes."""
+    auth = payload.get("auth") or {}
+    id_usuario = auth.get("user_id")
     cliente_id = payload.get("id_cliente")
     if not cliente_id:
         return {"status": "error", "error_code": "VALIDATION_ERROR", "error_message": "Se requiere id_cliente", "status_code": 400}
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        cur.execute("DELETE FROM cliente WHERE id_cliente = %s RETURNING id_cliente", (cliente_id,))
-        if cur.rowcount == 0:
+        cur.execute("SELECT nombre, rut FROM cliente WHERE id_cliente = %s", (cliente_id,))
+        cliente = cur.fetchone()
+        if not cliente:
             return {"status": "error", "error_code": "NOT_FOUND", "error_message": "Cliente no encontrado", "status_code": 404}
-        conn.commit()
+        nombre, rut = cliente
+
+        # Eliminar
+        cur.execute("DELETE FROM cliente WHERE id_cliente = %s RETURNING id_cliente", (cliente_id,))
 
         registrar_auditoria(
             id_usuario=id_usuario,
@@ -233,12 +243,15 @@ def main():
             if operation == "LIST_CLIENTES":
                 result = handle_list_clientes(payload)
             elif operation == "CREATE_CLIENTE":
+                payload["auth"] = auth 
                 result = handle_create_cliente(payload)
             elif operation == "GET_CLIENTE":
                 result = handle_get_cliente(payload)
             elif operation == "UPDATE_CLIENTE":
+                payload["auth"] = auth
                 result = handle_update_cliente(payload)
             elif operation == "DELETE_CLIENTE":
+                payload["auth"] = auth
                 result = handle_delete_cliente(payload)
             else:
                 result = {

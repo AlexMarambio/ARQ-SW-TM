@@ -51,6 +51,8 @@ def handle_list_vehiculos(payload):
 
 def handle_create_vehiculo(payload):
     """Crea un nuevo vehículo asociado a un cliente."""
+    auth = payload.get("auth") or {}
+    id_usuario = auth.get("user_id")
     id_cliente = payload.get("id_cliente")
     marca = payload.get("marca")
     modelo = payload.get("modelo")
@@ -127,6 +129,8 @@ def handle_get_vehiculo(payload):
 
 def handle_update_vehiculo(payload):
     """Actualiza un vehículo existente."""
+    auth = payload.get("auth") or {}
+    id_usuario = auth.get("user_id")
     vehiculo_id = payload.get("id_vehiculo")
     if not vehiculo_id:
         return {"status": "error", "error_code": "VALIDATION_ERROR", "error_message": "Se requiere id_vehiculo", "status_code": 400}
@@ -174,6 +178,8 @@ def handle_update_vehiculo(payload):
 
 def handle_delete_vehiculo(payload):
     """Elimina un vehículo (borrado físico)."""
+    auth = payload.get("auth") or {}
+    id_usuario = auth.get("user_id")
     vehiculo_id = payload.get("id_vehiculo")
     if not vehiculo_id:
         return {"status": "error", "error_code": "VALIDATION_ERROR", "error_message": "Se requiere id_vehiculo", "status_code": 400}
@@ -253,12 +259,15 @@ def main():
             if operation == "LIST_VEHICULOS":
                 result = handle_list_vehiculos(payload)
             elif operation == "CREATE_VEHICULO":
+                payload["auth"] = auth
                 result = handle_create_vehiculo(payload)
             elif operation == "GET_VEHICULO":
                 result = handle_get_vehiculo(payload)
             elif operation == "UPDATE_VEHICULO":
+                payload["auth"] = auth
                 result = handle_update_vehiculo(payload)
             elif operation == "DELETE_VEHICULO":
+                payload["auth"] = auth
                 result = handle_delete_vehiculo(payload)
             elif operation == "VEHICULOS_BY_CLIENTE":
                 result = handle_vehiculos_by_cliente(payload)

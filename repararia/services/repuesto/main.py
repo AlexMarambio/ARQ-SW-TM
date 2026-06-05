@@ -48,6 +48,8 @@ def handle_list_repuestos(payload):
 
 def handle_create_repuesto(payload):
     """Crea un nuevo repuesto."""
+    auth = payload.get("auth") or payload.get("_auth") or {}
+    id_usuario = auth.get("user_id") if isinstance(auth, dict) else None
     nombre = payload.get("nombre")
     descripcion = payload.get("descripcion")
     sku = payload.get("sku")
@@ -108,6 +110,8 @@ def handle_get_repuesto(payload):
 
 def handle_update_repuesto(payload):
     """Actualiza un repuesto."""
+    auth = payload.get("auth") or payload.get("_auth") or {}
+    id_usuario = auth.get("user_id") if isinstance(auth, dict) else None
     repuesto_id = payload.get("id_repuesto")
     if not repuesto_id:
         return {"status": "error", "error_code": "VALIDATION_ERROR", "error_message": "Se requiere id_repuesto", "status_code": 400}
@@ -151,6 +155,8 @@ def handle_update_repuesto(payload):
 
 def handle_delete_repuesto(payload):
     """Elimina un repuesto (solo si no está asociado a órdenes)."""
+    auth = payload.get("auth") or payload.get("_auth") or {}
+    id_usuario = auth.get("user_id") if isinstance(auth, dict) else None
     repuesto_id = payload.get("id_repuesto")
     if not repuesto_id:
         return {"status": "error", "error_code": "VALIDATION_ERROR", "error_message": "Se requiere id_repuesto", "status_code": 400}
@@ -196,6 +202,8 @@ def handle_get_alertas_stock(payload):
     return {"status": "success", "data": alertas}
 
 def handle_ajustar_stock(payload):
+    auth = payload.get("auth") or payload.get("_auth") or {}
+    id_usuario = auth.get("user_id") if isinstance(auth, dict) else None
     repuesto_id = payload.get("id_repuesto")
     nuevo_stock = payload.get("nuevo_stock")
     if not repuesto_id or nuevo_stock is None:
@@ -207,6 +215,13 @@ def handle_ajustar_stock(payload):
         if cur.rowcount == 0:
             return {"status": "error", "error_code": "NOT_FOUND", "error_message": "Repuesto no encontrado", "status_code": 404}
         conn.commit()
+        registrar_auditoria(
+            id_usuario=id_usuario,
+            accion="AJUSTAR_STOCK",
+            entidad="repuesto",
+            entidad_id=repuesto_id,
+            detalle=f"Stock ajustado para repuesto ID {repuesto_id}. Nuevo stock: {nuevo_stock}")
+
         return {"status": "success", "data": {"id_repuesto": repuesto_id, "nuevo_stock": nuevo_stock}}
     except Exception as e:
         conn.rollback()
@@ -259,22 +274,27 @@ def main():
             operation = req.get("operation")
             payload = req.get("payload", {})
             request_id = req.get("request_id")
+            auth = req.get("auth", {}) 
 
             print(f"Operación: {operation}, request_id: {request_id}")
 
             if operation == "LIST_REPUESTOS":
                 result = handle_list_repuestos(payload)
             elif operation == "CREATE_REPUESTO":
+                payload["auth"] = auth    
                 result = handle_create_repuesto(payload)
             elif operation == "GET_REPUESTO":
                 result = handle_get_repuesto(payload)
             elif operation == "UPDATE_REPUESTO":
+                payload["auth"] = auth
                 result = handle_update_repuesto(payload)
             elif operation == "DELETE_REPUESTO":
+                payload["auth"] = auth
                 result = handle_delete_repuesto(payload)
             elif operation == "GET_ALERTAS_STOCK":
                 result = handle_get_alertas_stock(payload)
             elif operation == "AJUSTAR_STOCK":
+                payload["auth"] = auth
                 result = handle_ajustar_stock(payload)
             elif operation == "GET_REPUESTO_BY_SKU":
                 result = handle_get_by_sku(payload)
