@@ -3,6 +3,6 @@ uvicorn
 chromadb
 sentence-transformers
 langchain
-langchain-groq
+langchain-google-genai
 pypdf2
 python-dotenv
