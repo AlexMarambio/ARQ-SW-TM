@@ -206,7 +206,7 @@ def handle_agregar_repuesto(payload):
         if not cur.fetchone():
             return {"status": "error", "error_code": "NOT_FOUND", "error_message": "Orden no encontrada", "status_code": 404}
         # Obtener precio y stock del repuesto
-        cur.execute("SELECT precio_unitario, stock FROM repuesto WHERE id_repuesto = %s", (repuesto_id,))
+        cur.execute("SELECT precio_unitario, stock_actual FROM repuesto WHERE id_repuesto = %s", (repuesto_id,))
         rep = cur.fetchone()
         if not rep:
             return {"status": "error", "error_code": "NOT_FOUND", "error_message": "Repuesto no encontrado", "status_code": 404}
@@ -219,7 +219,7 @@ def handle_agregar_repuesto(payload):
             (orden_id, repuesto_id, cantidad, precio)
         )
         # Actualizar stock
-        cur.execute("UPDATE repuesto SET stock = stock - %s WHERE id_repuesto = %s", (cantidad, repuesto_id))
+        cur.execute("UPDATE repuesto SET stock_actual = stock_actual - %s WHERE id_repuesto = %s", (cantidad, repuesto_id))
         # Recalcular costo_total (suma de repuestos)
         cur.execute(
             "SELECT COALESCE(SUM(orden_repuesto.cantidad * orden_repuesto.precio_unitario_momento), 0) FROM orden_repuesto WHERE id_orden = %s",
@@ -248,14 +248,13 @@ def handle_agregar_repuesto(payload):
 
 def handle_cerrar_orden(payload):
     auth = payload.get("auth") or {}
-    id_usuario = auth.get("user_id") if isinstance(auth, dict) else None
+    id_usuario = auth.get("user_id")
     orden_id = payload.get("id_orden")
     if not orden_id:
         return {"status": "error", "error_code": "VALIDATION_ERROR", "error_message": "Se requiere id_orden", "status_code": 400}
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        # Obtener orden actual
         cur.execute("SELECT estado, costo_total FROM orden_trabajo WHERE id_orden = %s", (orden_id,))
         row = cur.fetchone()
         if not row:
@@ -263,17 +262,18 @@ def handle_cerrar_orden(payload):
         estado, costo_total = row
         if estado == "entregado":
             return {"status": "error", "error_code": "BAD_REQUEST", "error_message": "La orden ya está cerrada", "status_code": 400}
-        # Cambiar estado a 'listo' o 'entregado'? Por ahora, si se cierra se pone 'entregado'
         fecha_entrega = datetime.now()
         cur.execute(
             "UPDATE orden_trabajo SET estado = 'entregado', fecha_entrega = %s WHERE id_orden = %s",
             (fecha_entrega, orden_id)
         )
-        # Crear factura (placeholder, sin servicio de facturación)
-        # Insertar en tabla factura
+        # Calcular IVA (19%) y total
+        monto_neto = costo_total
+        iva = monto_neto * Decimal('0.19')
+        monto_total = monto_neto + iva
         cur.execute(
-            "INSERT INTO factura (id_orden, monto_total, estado_pago, metodo_pago) VALUES (%s, %s, 'pendiente', NULL) RETURNING id_factura",
-            (orden_id, costo_total)
+            "INSERT INTO factura (id_orden, monto_neto, iva, monto_total, estado_pago, metodo_pago) VALUES (%s, %s, %s, %s, 'pendiente', NULL) RETURNING id_factura",
+            (orden_id, monto_neto, iva, monto_total)
         )
         factura_id = cur.fetchone()[0]
         conn.commit()
@@ -282,7 +282,7 @@ def handle_cerrar_orden(payload):
             accion="CERRAR_ORDEN",
             entidad="orden_trabajo",
             entidad_id=orden_id,
-            detalle=f"Orden ID {orden_id} cerrada. Se generó factura ID {factura_id} por monto {costo_total}"
+            detalle=f"Orden ID {orden_id} cerrada. Se generó factura ID {factura_id} por monto {monto_total}"
         )
         return {"status": "success", "data": {"id_orden": orden_id, "estado": "entregado", "id_factura": factura_id, "costo_total": float(costo_total)}}
     except Exception as e:

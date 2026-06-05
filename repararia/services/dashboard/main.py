@@ -35,7 +35,8 @@ def handle_kpi_admin(payload):
 
         # Promedio de costo por orden (solo órdenes con costo > 0)
         cur.execute("SELECT AVG(costo_total) FROM orden_trabajo WHERE costo_total > 0")
-        avg_costo = float(cur.fetchone()[0]) if cur.fetchone()[0] else 0.0
+        avg_row = cur.fetchone()
+        avg_costo = float(avg_row[0]) if avg_row and avg_row[0] is not None else 0.0
 
         # Top 3 clientes (por cantidad de órdenes)
         cur.execute("""
