@@ -21,11 +21,30 @@ services:
       - repararia-internal
 
   chromadb:
-    image: chromadb/chroma:0.5.23
+    image: chromadb/chroma:latest
     container_name: repararia-chromadb
     restart: unless-stopped
     volumes:
       - chroma_data:/chroma/chroma
+    networks:
+      - repararia-internal
+
+  # Agrega esto a tu docker-compose existente
+
+  ia-service:
+    build:
+      context: ./services/ia
+      dockerfile: Dockerfile
+    container_name: repararia-ia
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
+    depends_on:
+      - chromadb
     networks:
       - repararia-internal
 
@@ -307,7 +326,7 @@ services:
       - "5173:5173"
     volumes: # PRUEBA
       - ./frontend:/app
-      - /app/node_modules  
+      - /app/node_modules
     depends_on:
       - api-gateway
     networks:
