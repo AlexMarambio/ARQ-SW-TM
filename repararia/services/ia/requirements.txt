@@ -1,8 +1,5 @@
-fastapi
-uvicorn
 chromadb
 sentence-transformers
 langchain
 langchain-google-genai
-pypdf2
 python-dotenv

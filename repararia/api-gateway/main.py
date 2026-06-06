@@ -8,6 +8,8 @@ from routers.ordenes import router as ordenes_router
 from routers.facturacion import router as facturacion_router
 from routers.auditoria import router as auditoria_router
 from routers.dashboard import router as dashboard_router
+from routers.ia import router as ia_router
+
 app = FastAPI(title="RepararIA-API", version="1.0.0")
 
 app.add_middleware(
@@ -27,6 +29,7 @@ app.include_router(facturacion_router)
 app.include_router(ordenes_router)
 app.include_router(auditoria_router)
 app.include_router(dashboard_router)
+app.include_router(ia_router)
 
 @app.get("/health")
 def health():
