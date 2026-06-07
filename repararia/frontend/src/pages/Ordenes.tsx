@@ -3,13 +3,7 @@ import { CheckCircle2, Plus, RefreshCcw, Save, Wrench, TriangleAlert } from "luc
 import { apiRequest, Orden, Repuesto } from "../api/client";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Table, TBody, TD, TH, THead, TR } from "../components/ui/table";
@@ -37,19 +31,31 @@ export default function OrdenesPage() {
 
   const [repuestoForm, setRepuestoForm] = useState({
     id_repuesto: "",
-    cantidad: "1",
+    //cantidad: "1",
+    amount: "1", //
   });
 
   async function load() {
     setLoading(true);
     setError(null);
     try {
-      const ordenData = await apiRequest<Orden[]>("/ordenes/orden_list?limit=100", { auth: true });
-      setOrdenes(Array.isArray(ordenData) ? ordenData : []);
+      const ordenData = await apiRequest<any>("/ordenes/orden_list?limit=100", { auth: true });
+      //setOrdenes(Array.isArray(ordenData) ? ordenData : []);
       
-      const repuestoData = await apiRequest<{ items: Repuesto[] }>("/repuestos", { auth: true });
-      if (repuestoData && repuestoData.items) {
+      if (ordenData && ordenData.status === "success" && Array.isArray(ordenData.data)) {
+        setOrdenes(ordenData.data);
+      } else {
+        setOrdenes(Array.isArray(ordenData) ? ordenData : []);
+      }
+
+
+      const repuestoData = await apiRequest<any>("/repuesto/list_repuestos?limit=150", { auth: true });
+      if (repuestoData && repuestoData.status === "success" && Array.isArray(repuestoData.data)) {
+        setRepuestos(repuestoData.data);
+      } else if (repuestoData && repuestoData.items) {
         setRepuestos(repuestoData.items);
+      } else {
+        setRepuestos(Array.isArray(repuestoData) ? repuestoData : []);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al conectar con la pasarela de servicios");
@@ -68,6 +74,7 @@ export default function OrdenesPage() {
     setError(null);
     setMessage(null);
     try {
+
       await apiRequest<Orden>("/ordenes/create_orden", {
         method: "POST",
         body: {
@@ -104,7 +111,7 @@ export default function OrdenesPage() {
     try {
       await apiRequest(`/ordenes/change_by/${selected}/estado`, {
         method: "PATCH",
-        body: { nuevo_estado: estado },
+        body: { estado: estado },
       });
       setMessage(`Estado de la orden #${selected} mutado a ${estado}`);
       await load();
@@ -126,11 +133,11 @@ export default function OrdenesPage() {
         method: "POST",
         body: {
           id_repuesto: Number(repuestoForm.id_repuesto),
-          cantidad: Number(repuestoForm.cantidad),
+          cantidad: Number(repuestoForm.amount), 
         },
       });
       setMessage("Asignación de material consolidada en el inventario");
-      setRepuestoForm({ id_repuesto: "", cantidad: "1" });
+      setRepuestoForm({ id_repuesto: "", amount: "1" });
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Fallo al asignar repuesto");
@@ -337,8 +344,8 @@ export default function OrdenesPage() {
                 </Field>
                 <Field label="Cantidad Solicitada">
                   <Input
-                    value={repuestoForm.cantidad}
-                    onChange={(e) => setRepuestoForm({ ...repuestoForm, cantidad: e.target.value })}
+                    value={repuestoForm.amount}
+                    onChange={(e) => setRepuestoForm({ ...repuestoForm, amount: e.target.value })}
                     type="number"
                     min="1"
                     required
