@@ -85,14 +85,14 @@ export default function ClientesPage({ session }: ClientesPageProps) {
     try {
       if (editingId !== null) {
         // UPDATE_CLIENTE enviada al Bus
-        await apiRequest(`/cliente/${editingId}`, {
+        await apiRequest(`/cliente/update_cliente/${editingId}`, {
           method: "PUT",
           body: form,
         });
         setMessage("Datos del cliente actualizados correctamente en el modelo relacional");
       } else {
         // CREATE_CLIENTE enviada al Bus
-        await apiRequest("/cliente/", {
+        await apiRequest("/cliente/create_cliente", {
           method: "POST",
           body: form,
         });

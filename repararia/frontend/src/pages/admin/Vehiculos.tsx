@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useState, useMemo } from "react";
 import { Plus, RefreshCcw, Car, TriangleAlert, CheckCircle2 } from "lucide-react";
 import { apiRequest } from "../../api/client";
 import { Button } from "../../components/ui/button";
@@ -40,6 +40,7 @@ export default function VehiculosPage({ session }: VehiculosPageProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [form, setForm] = useState({
     id_cliente: "",
@@ -59,7 +60,7 @@ export default function VehiculosPage({ session }: VehiculosPageProps) {
     try {
       // Invocacion controlada mediante Bridge a servicios del Bus
       const [vehiculosData, clientesData] = await Promise.all([
-        apiRequest<Vehiculo[]>("/vehiculo/", { auth: true }),
+        apiRequest<Vehiculo[]>("/vehiculo/list_vehiculos", { auth: true }),
         apiRequest<Cliente[]>("/cliente/list_clientes", { auth: true }),
       ]);
       setVehiculos(Array.isArray(vehiculosData) ? vehiculosData : []);
@@ -77,6 +78,20 @@ export default function VehiculosPage({ session }: VehiculosPageProps) {
     }
   }, [isAuthorized]);
 
+  //busqueda en memoria waparda
+  const filteredVehiculos = useMemo(() => {
+    const query = searchQuery.toLowerCase().trim();
+    if (!query) return vehiculos.filter((v) =>
+      v.patente.toLowerCase().includes(query) ||
+      v.marca.toLowerCase().includes(query) ||
+      v.modelo.toLowerCase().includes(query) ||
+      v.anio.toString().includes(query) ||
+      v.color?.toLowerCase().includes(query) 
+      //clientes.find((c) => c.id_cliente === v.id_cliente)?.nombre.toLowerCase().includes(query) ||
+      //clientes.find((c) => c.id_cliente === v.id_cliente)?.rut.toLowerCase().includes(query);
+    );
+  }, [vehiculos, searchQuery]);
+
   async function handleEnroll(e: FormEvent) {
     e.preventDefault();
     if (!isAuthorized) return;
@@ -85,7 +100,7 @@ export default function VehiculosPage({ session }: VehiculosPageProps) {
     setMessage(null);
 
     try {
-      await apiRequest("/vehiculo/", {
+      await apiRequest("/vehiculo/create_vehiculo", {
         method: "POST",
         body: {
           id_cliente: Number(form.id_cliente),

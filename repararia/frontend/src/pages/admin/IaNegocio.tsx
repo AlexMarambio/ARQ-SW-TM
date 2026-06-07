@@ -26,7 +26,7 @@ export default function IaNegocioPage({ session }: IaNegocioPageProps) {
     {
       id: "init-msg",
       sender: "bot",
-      text: "Bienvenido al módulo analítico RepararIA. Estoy conectado al bus de servicios interno de la compañía. Puede consultarme indicadores financieros, productividad de mecánicos o consolidación de inventarios mediante procesamiento de lenguaje natural.",
+      text: "Bienvenido al asistente analítico de RepararIA. Estoy conectado de forma síncrona al bus interno del sistema. Puede consultarme reportes financieros, carga de trabajo por mecánico o análisis crítico de materiales en lenguaje natural.",
       timestamp: new Date(),
     },
   ]);
@@ -34,12 +34,13 @@ export default function IaNegocioPage({ session }: IaNegocioPageProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const containerRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  //const containerRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll del contenedor de conversación
   useEffect(() => {
-    if (containerRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, loading]);
 
@@ -51,7 +52,7 @@ export default function IaNegocioPage({ session }: IaNegocioPageProps) {
     setInput("");
     setError(null);
 
-    // Adjuntar mensaje local del Administrador
+    // Adjunta mensaje local del admin
     const userMessage: Message = {
       id: `usr-${Date.now()}`,
       sender: "user",
@@ -129,7 +130,7 @@ export default function IaNegocioPage({ session }: IaNegocioPageProps) {
         {/* Contenedor de Burbujas Reactivo */}
         <CardContent className="p-0">
           <div 
-            ref={containerRef} 
+            ref={scrollRef} 
             className="p-4 h-[420px] overflow-y-auto space-y-4 bg-slate-50/30 scroll-smooth"
           >
             {messages.map((msg) => {

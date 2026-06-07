@@ -44,8 +44,8 @@ export default function InventarioPage({ session }: InventarioPageProps) {
     setError(null);
     try {
       const [globalData, alertasData] = await Promise.all([
-        apiRequest<{ items: Repuesto[] }>("/repuestos?limit=200", { auth: true }),
-        apiRequest<Repuesto[]>("/repuestos/alertas", { auth: true }),
+        apiRequest<{ items: Repuesto[] }>("/repuesto/list_repuestos?limit=100", { auth: true }),
+        apiRequest<Repuesto[]>("/repuesto/stock_repuesto?umbral=5", { auth: true }),
       ]);
       
       setRepuestos(globalData && Array.isArray(globalData.items) ? globalData.items : []);
@@ -69,8 +69,8 @@ export default function InventarioPage({ session }: InventarioPageProps) {
     setError(null);
     setMessage(null);
     try {
-      await apiRequest(`/repuestos/${id_repuesto}/stock`, {
-        method: "PATCH",
+      await apiRequest(`/repuesto/ajustar_stock_by/${id_repuesto}`, {
+        method: "PUT",
         body: { stock_actual: nuevoStock },
       });
       setMessage(`Stock del repuesto id #${id_repuesto} modificado de forma directa en almacén`);
