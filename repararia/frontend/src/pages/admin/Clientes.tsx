@@ -139,7 +139,7 @@ export default function ClientesPage({ session }: ClientesPageProps) {
           <p className="text-sm text-muted-foreground">Mantenimiento de entidades e historial de contacto del taller mecánico.</p>
         </div>
         <Button variant="outline" onClick={loadClientes} disabled={loading}>
-          <RefreshCcw className="h-4 w-4 mr-2" /> Sincronizar Clientes
+          <RefreshCcw className="h-4 w-4 mr-2" /> Actualizar
         </Button>
       </div>
 

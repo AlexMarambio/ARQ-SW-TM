@@ -103,7 +103,7 @@ export default function InventarioPage({ session }: InventarioPageProps) {
           <p className="text-sm text-muted-foreground">Monitoreo de SKU y control crítico ante quiebres de material de reposición.</p>
         </div>
         <Button variant="outline" onClick={loadInventario} disabled={loading}>
-          <RefreshCcw className="h-4 w-4 mr-2" /> Sincronizar Kardex
+          <RefreshCcw className="h-4 w-4 mr-2" /> Actualizar
         </Button>
       </div>
 

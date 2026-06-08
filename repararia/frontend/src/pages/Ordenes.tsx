@@ -169,12 +169,12 @@ export default function OrdenesPage() {
           <div>
             <h2 className="text-2xl font-semibold tracking-tight">Gestión Operativa de Órdenes</h2>
             <p className="text-sm text-muted-foreground">
-              Bridge de traducción HTTP a Sockets TCP nativos para control de flujo del taller.
+              Panel de control para administración de órdenes de trabajo.
             </p>
           </div>
           <Button variant="outline" onClick={load} disabled={loading}>
             <RefreshCcw className="h-4 w-4 mr-2" />
-            Sincronizar Bus
+            Actualizar
           </Button>
         </div>
 

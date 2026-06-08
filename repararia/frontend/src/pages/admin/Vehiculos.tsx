@@ -152,7 +152,7 @@ export default function VehiculosPage({ session }: VehiculosPageProps) {
           <p className="text-sm text-muted-foreground">Catálogo de trazabilidad de unidades especializadas vinculadas al padrón activo.</p>
         </div>
         <Button variant="outline" onClick={loadData} disabled={loading}>
-          <RefreshCcw className="h-4 w-4 mr-2" /> Sincronizar Parque
+          <RefreshCcw className="h-4 w-4 mr-2" /> Actualizar
         </Button>
       </div>
 
