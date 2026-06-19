@@ -76,15 +76,15 @@ def handle_list_ordenes(payload):
     return {"status": "success", "data": ordenes}
 
 def handle_create_orden(payload):
-    # Campos requeridos: id_cliente, id_vehiculo, descripcion_problema
+    # Campos requeridos: id_cliente, id_vehiculo
     auth = payload.get("auth") or {}
     id_usuario = auth.get("user_id") if isinstance(auth, dict) else None
     id_cliente = payload.get("id_cliente")
     id_vehiculo = payload.get("id_vehiculo")
     id_mecanico = payload.get("id_mecanico")  # opcional
-    descripcion_problema = payload.get("descripcion_problema")
+    descripcion_problema = payload.get("descripcion_problema") or "Sin descripción"
     fecha_estimada = payload.get("fecha_estimada")  # string ISO date
-    if not all([id_cliente, id_vehiculo, descripcion_problema]):
+    if not all([id_cliente, id_vehiculo]):
         return {"status": "error", "error_code": "VALIDATION_ERROR", "error_message": "Faltan campos obligatorios", "status_code": 400}
     conn = get_db_connection()
     cur = conn.cursor()

@@ -366,7 +366,8 @@ export interface IOrden {
   id_cliente: number;
   id_vehiculo: number;
   id_mecanico?: number | null;
-  descripcion: string;
+  descripcion?: string;
+  descripcion_problema?: string;
   estado: EstadoOrden;
   costo_total?: number;
   fecha_ingreso?: string;
@@ -385,8 +386,8 @@ export interface IOrden {
 export interface ICreateOrden {
   id_cliente: number;
   id_vehiculo: number;
-  id_mecanico: number;
-  descripcion: string;
+  id_mecanico?: number | null;
+  descripcion_problema?: string;
   estado?: EstadoOrden;
 }
 

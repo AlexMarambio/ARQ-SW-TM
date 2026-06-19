@@ -14,7 +14,7 @@ import {
   UserCog,
   LayoutDashboard,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { apiRequest, LoginResponse, setAccessToken } from "./api/client";
 import { Button } from "./components/ui/button";
@@ -42,6 +42,8 @@ type Session = {
   nombre: string;
 };
 
+const AUTH_STORAGE_KEY = "repararia.auth";
+
 type View =
   | "dashboard"
   | "ordenes"
@@ -60,6 +62,22 @@ type View =
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [view, setView] = useState<View>("dashboard");
+
+  useEffect(() => {
+    const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (!stored) return;
+
+    try {
+      const parsed = JSON.parse(stored) as { token?: string; session?: Session };
+      if (parsed.token && parsed.session) {
+        setAccessToken(parsed.token);
+        setSession(parsed.session);
+        setView(parsed.session.rol === "mecanico" ? "dashboard_mecanico" : "dashboard");
+      }
+    } catch {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+    }
+  }, []);
 
   const navItems = useMemo(() => {
     if (!session) {
@@ -98,7 +116,12 @@ export default function App() {
 
   async function handleLogin(data: LoginResponse) {
     setAccessToken(data.token);
-    setSession({ userId: data.user.id, rol: data.user.rol, nombre: data.user.nombre });
+    const nextSession = { userId: data.user.id, rol: data.user.rol, nombre: data.user.nombre };
+    setSession(nextSession);
+    localStorage.setItem(
+      AUTH_STORAGE_KEY,
+      JSON.stringify({ token: data.token, session: nextSession }),
+    );
     if (data.user.rol === "mecanico") {
       setView("dashboard_mecanico");
     } else {
@@ -112,6 +135,7 @@ export default function App() {
     } finally {
       setAccessToken(null);
       setSession(null);
+      localStorage.removeItem(AUTH_STORAGE_KEY);
       setView("dashboard");
     }
   }
