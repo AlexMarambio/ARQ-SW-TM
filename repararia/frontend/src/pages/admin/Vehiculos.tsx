@@ -1,5 +1,5 @@
-import { FormEvent, useEffect, useState } from "react";
-import { Plus, RefreshCcw, Car, TriangleAlert, CheckCircle2, Loader2 } from "lucide-react";
+import { FormEvent, useEffect, useState, useMemo } from "react";
+import { Plus, RefreshCcw, Car, TriangleAlert, CheckCircle2 } from "lucide-react";
 import { apiRequest } from "../../api/client";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
@@ -25,11 +25,14 @@ interface Cliente {
   rut: string;
 }
 
-interface Props {
-  session: { rol: "administrador" | "mecanico" | "sysadmin"; userId: number } | null;
+interface VehiculosPageProps {
+  session: {
+    rol: "administrador" | "mecanico" | "sysadmin";
+    userId: number;
+  } | null;
 }
 
-export default function VehiculosPage({ session }: Props) {
+export default function VehiculosPage({ session }: VehiculosPageProps) {
   const isAuthorized = session?.rol === "administrador" || session?.rol === "sysadmin";
 
   const [vehiculos, setVehiculos] = useState<Vehiculo[]>([]);
@@ -37,34 +40,65 @@ export default function VehiculosPage({ session }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [form, setForm] = useState({
-    id_cliente: "", patente: "", marca: "", modelo: "",
+    id_cliente: "",
+    patente: "",
+    marca: "",
+    modelo: "",
     anio: new Date().getFullYear().toString(),
-    num_motor: "", kilometraje: "0", color: "",
+    num_motor: "",
+    kilometraje: "0",
+    color: "",
   });
 
   async function loadData() {
     if (!isAuthorized) return;
-    setLoading(true); setError(null);
+    setLoading(true);
+    setError(null);
     try {
-      const [vData, cData] = await Promise.all([
+      // Invocacion controlada mediante Bridge a servicios del Bus
+      const [vehiculosData, clientesData] = await Promise.all([
         apiRequest<Vehiculo[]>("/vehiculo/list_vehiculos", { auth: true }),
         apiRequest<Cliente[]>("/cliente/list_clientes", { auth: true }),
       ]);
-      setVehiculos(Array.isArray(vData) ? vData : []);
-      setClientes(Array.isArray(cData) ? cData : []);
+      setVehiculos(Array.isArray(vehiculosData) ? vehiculosData : []);
+      setClientes(Array.isArray(clientesData) ? clientesData : []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al cargar datos.");
-    } finally { setLoading(false); }
+      setError(err instanceof Error ? err.message : "Error agregando dependencias desde la capa SOA");
+    } finally {
+      setLoading(false);
+    }
   }
 
-  useEffect(() => { if (isAuthorized) void loadData(); }, [isAuthorized]);
+  useEffect(() => {
+    if (isAuthorized) {
+      void loadData();
+    }
+  }, [isAuthorized]);
+
+  //busqueda en memoria waparda
+  const filteredVehiculos = useMemo(() => {
+    const query = searchQuery.toLowerCase().trim();
+    if (!query) return vehiculos.filter((v) =>
+      v.patente.toLowerCase().includes(query) ||
+      v.marca.toLowerCase().includes(query) ||
+      v.modelo.toLowerCase().includes(query) ||
+      v.anio.toString().includes(query) ||
+      v.color?.toLowerCase().includes(query) 
+      //clientes.find((c) => c.id_cliente === v.id_cliente)?.nombre.toLowerCase().includes(query) ||
+      //clientes.find((c) => c.id_cliente === v.id_cliente)?.rut.toLowerCase().includes(query);
+    );
+  }, [vehiculos, searchQuery]);
 
   async function handleEnroll(e: FormEvent) {
     e.preventDefault();
     if (!isAuthorized) return;
-    setLoading(true); setError(null); setMessage(null);
+    setLoading(true);
+    setError(null);
+    setMessage(null);
+
     try {
       await apiRequest("/vehiculo/create_vehiculo", {
         method: "POST",
@@ -79,21 +113,32 @@ export default function VehiculosPage({ session }: Props) {
           color: form.color.trim() || null,
         },
       });
-      setMessage(`Vehículo ${form.patente.toUpperCase()} registrado correctamente.`);
-      setForm({ id_cliente: "", patente: "", marca: "", modelo: "", anio: new Date().getFullYear().toString(), num_motor: "", kilometraje: "0", color: "" });
+      setMessage(`Vehículo con patente [${form.patente.toUpperCase()}] incorporado al registro de trazabilidad`);
+      setForm({
+        id_cliente: "",
+        patente: "",
+        marca: "",
+        modelo: "",
+        anio: new Date().getFullYear().toString(),
+        num_motor: "",
+        kilometraje: "0",
+        color: "",
+      });
       await loadData();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo registrar el vehículo.");
-    } finally { setLoading(false); }
+      setError(err instanceof Error ? err.message : "Fallo al procesar enrolamiento de chasis");
+    } finally {
+      setLoading(false);
+    }
   }
 
   if (!isAuthorized) {
     return (
-      <div className="flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
+      <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
         <TriangleAlert className="h-5 w-5 shrink-0" />
         <div>
-          <p className="font-semibold">Acceso denegado</p>
-          <p className="text-xs mt-0.5 text-red-600">No tienes permisos para gestionar vehículos.</p>
+          <h3 className="font-semibold">Acceso Denegado (403 Privilege Violation)</h3>
+          <p className="text-xs mt-1">Su rol actual no posee los privilegios requeridos para invocar los endpoints transaccionales del subsistema de Vehículos.</p>
         </div>
       </div>
     );
@@ -103,70 +148,67 @@ export default function VehiculosPage({ session }: Props) {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Vehículos</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Registro y trazabilidad del parque vehicular.</p>
+          <h2 className="text-2xl font-bold tracking-tight">Enrolamiento y Parque de Vehículos</h2>
+          <p className="text-sm text-muted-foreground">Catálogo de trazabilidad de unidades especializadas vinculadas al padrón activo.</p>
         </div>
-        <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
-          <RefreshCcw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-          Actualizar
+        <Button variant="outline" onClick={loadData} disabled={loading}>
+          <RefreshCcw className="h-4 w-4 mr-2" /> Actualizar
         </Button>
       </div>
 
       {message && (
-        <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+        <div className="flex items-center gap-2 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-800">
           <CheckCircle2 className="h-4 w-4 shrink-0" /> {message}
         </div>
       )}
+
       {error && (
-        <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
           <TriangleAlert className="h-4 w-4 shrink-0" /> {error}
         </div>
       )}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
-
         <Card>
           <CardHeader>
-            <CardTitle>Vehículos registrados</CardTitle>
-            <CardDescription>{vehiculos.length} unidades en el sistema.</CardDescription>
+            <CardTitle>Historial de Unidades Activas</CardTitle>
+            <CardDescription>Listado global ordenado cronológicamente por ingreso al taller.</CardDescription>
           </CardHeader>
-          <CardContent className="p-0">
+          <CardContent>
             <Table>
               <THead>
                 <TR>
                   <TH>Patente</TH>
-                  <TH>Vehículo</TH>
+                  <TH>Vehículo / Modelo</TH>
                   <TH>Kilometraje</TH>
-                  <TH>Propietario</TH>
+                  <TH>Propietario Asociado</TH>
                 </TR>
               </THead>
               <TBody>
                 {vehiculos.map((veh) => {
                   const owner = clientes.find((c) => c.id_cliente === veh.id_cliente);
                   return (
-                    <TR key={veh.id_vehiculo}>
-                      <TD>
-                        <span className="font-mono text-xs font-bold bg-amber-50 border border-amber-200 text-amber-900 px-2 py-1 rounded-md">
+                    <TR key={veh.id_vehiculo} className="hover:bg-muted/40 transition-colors">
+                      <TD className="font-mono font-bold tracking-wider text-sm">
+                        <span className="bg-amber-100 border border-amber-300 text-amber-950 px-2 py-0.5 rounded text-xs">
                           {veh.patente}
                         </span>
                       </TD>
                       <TD>
-                        <p className="font-medium text-slate-900">{veh.marca} {veh.modelo}</p>
-                        <p className="text-xs text-slate-400">{veh.anio} · {veh.color || "—"}</p>
+                        <div className="font-medium">{veh.marca} {veh.modelo}</div>
+                        <div className="text-xs text-muted-foreground">Año: {veh.anio} | Color: {veh.color || "-"}</div>
                       </TD>
-                      <TD>
-                        <span className="font-mono text-sm font-semibold text-slate-700">
-                          {veh.kilometraje.toLocaleString("es-CL")} km
-                        </span>
+                      <TD className="font-mono text-xs text-right font-semibold">
+                        {veh.kilometraje.toLocaleString("es-CL")} Km
                       </TD>
-                      <TD>
+                      <TD className="text-xs">
                         {owner ? (
                           <div>
-                            <p className="text-sm font-medium text-slate-900">{owner.nombre}</p>
-                            <p className="text-xs text-slate-400 font-mono">{owner.rut}</p>
+                            <p className="font-medium text-slate-900">{owner.nombre}</p>
+                            <p className="text-muted-foreground">{owner.rut}</p>
                           </div>
                         ) : (
-                          <span className="text-xs text-red-500">ID: {veh.id_cliente}</span>
+                          <span className="text-destructive font-mono">ID Cliente: {veh.id_cliente}</span>
                         )}
                       </TD>
                     </TR>
@@ -174,8 +216,8 @@ export default function VehiculosPage({ session }: Props) {
                 })}
                 {!vehiculos.length && (
                   <TR>
-                    <TD colSpan={4} className="h-32 text-center text-slate-400">
-                      {loading ? "Cargando vehículos..." : "Sin vehículos registrados."}
+                    <TD colSpan={4} className="h-24 text-center text-muted-foreground text-sm">
+                      No se encuentran vehículos enrolados en el sistema central.
                     </TD>
                   </TR>
                 )}
@@ -186,21 +228,21 @@ export default function VehiculosPage({ session }: Props) {
 
         <Card>
           <CardHeader>
-            <CardTitle>Registrar vehículo</CardTitle>
-            <CardDescription>Vincula el vehículo a un cliente existente.</CardDescription>
+            <CardTitle>Alta de Vehículo</CardTitle>
+            <CardDescription>Asignación y vinculación relacional obligatoria.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleEnroll} className="space-y-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="id_cliente">Propietario</Label>
+              <div className="space-y-1">
+                <Label htmlFor="id_cliente">Asignar Propietario</Label>
                 <select
                   id="id_cliente"
-                  className="flex h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
+                  className="h-10 w-full rounded-md border bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   value={form.id_cliente}
                   onChange={(e) => setForm({ ...form, id_cliente: e.target.value })}
                   required
                 >
-                  <option value="">Seleccionar propietario...</option>
+                  <option value="">Seleccionar Propietario...</option>
                   {clientes.map((c) => (
                     <option key={c.id_cliente} value={c.id_cliente}>
                       {c.nombre} ({c.rut})
@@ -209,43 +251,89 @@ export default function VehiculosPage({ session }: Props) {
                 </select>
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="patente">Patente</Label>
-                <Input id="patente" value={form.patente} onChange={(e) => setForm({ ...form, patente: e.target.value })} placeholder="BBCC11" maxLength={8} required />
+              <div className="space-y-1">
+                <Label htmlFor="patente">Patente (Formato chileno)</Label>
+                <Input
+                  id="patente"
+                  value={form.patente}
+                  onChange={(e) => setForm({ ...form, patente: e.target.value })}
+                  placeholder="BBCC11 o ABCD11"
+                  maxLength={8}
+                  required
+                />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label>Marca</Label>
-                  <Input value={form.marca} onChange={(e) => setForm({ ...form, marca: e.target.value })} placeholder="BMW" required />
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label htmlFor="marca">Marca</Label>
+                  <Input
+                    id="marca"
+                    value={form.marca}
+                    onChange={(e) => setForm({ ...form, marca: e.target.value })}
+                    placeholder="Ej: BMW"
+                    required
+                  />
                 </div>
-                <div className="space-y-1.5">
-                  <Label>Modelo</Label>
-                  <Input value={form.modelo} onChange={(e) => setForm({ ...form, modelo: e.target.value })} placeholder="M3" required />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Año</Label>
-                  <Input type="number" value={form.anio} onChange={(e) => setForm({ ...form, anio: e.target.value })} min={1970} max={new Date().getFullYear() + 1} required />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Color</Label>
-                  <Input value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} placeholder="Gris mineral" />
+                <div className="space-y-1">
+                  <Label htmlFor="modelo">Modelo</Label>
+                  <Input
+                    id="modelo"
+                    value={form.modelo}
+                    onChange={(e) => setForm({ ...form, modelo: e.target.value })}
+                    placeholder="Ej: M3"
+                    required
+                  />
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <Label>Kilometraje</Label>
-                <Input type="number" value={form.kilometraje} onChange={(e) => setForm({ ...form, kilometraje: e.target.value })} min={0} required />
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label htmlFor="anio">Año Fabricación</Label>
+                  <Input
+                    id="anio"
+                    type="number"
+                    value={form.anio}
+                    onChange={(e) => setForm({ ...form, anio: e.target.value })}
+                    min={1970}
+                    max={new Date().getFullYear() + 1}
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="color">Color</Label>
+                  <Input
+                    id="color"
+                    value={form.color}
+                    onChange={(e) => setForm({ ...form, color: e.target.value })}
+                    placeholder="Gris Mineral"
+                  />
+                </div>
               </div>
 
-              <div className="space-y-1.5">
-                <Label>N° motor (opcional)</Label>
-                <Input value={form.num_motor} onChange={(e) => setForm({ ...form, num_motor: e.target.value })} placeholder="N55B30A..." />
+              <div className="space-y-1">
+                <Label htmlFor="kilometraje">Kilometraje Inicial en Taller</Label>
+                <Input
+                  id="kilometraje"
+                  type="number"
+                  value={form.kilometraje}
+                  onChange={(e) => setForm({ ...form, kilometraje: e.target.value })}
+                  min={0}
+                  required
+                />
               </div>
 
-              <Button className="w-full" type="submit" disabled={loading}>
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Car className="h-4 w-4" />}
-                Registrar vehículo
+              <div className="space-y-1">
+                <Label htmlFor="num_motor">Número de Motor (Bloque Chasis)</Label>
+                <Input
+                  id="num_motor"
+                  value={form.num_motor}
+                  onChange={(e) => setForm({ ...form, num_motor: e.target.value })}
+                  placeholder="N55B30A..."
+                />
+              </div>
+
+              <Button className="w-full pt-2" type="submit" disabled={loading}>
+                <Car className="h-4 w-4 mr-2" /> Enrolar Vehículo
               </Button>
             </form>
           </CardContent>

@@ -1,84 +1,131 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Plus, RefreshCcw, Search, Edit2, Check, TriangleAlert, X, Loader2 } from "lucide-react";
-import { ICliente, clienteApi } from "../../api/client";
+import { Plus, RefreshCcw, Search, Edit2, Check, TriangleAlert } from "lucide-react";
+import { apiRequest } from "../../api/client";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Table, TBody, TD, TH, THead, TR } from "../../components/ui/table";
 
+interface Cliente {
+  id_cliente: number;
+  rut: string;
+  email: string;
+  nombre: string;
+  telefono?: string;
+  direccion?: string;
+  fecha_registro: string;
+}
+
 interface ClientesPageProps {
-  session: { rol: "administrador" | "mecanico" | "sysadmin"; userId: number } | null;
+  session: {
+    rol: "administrador" | "mecanico" | "sysadmin";
+    userId: number;
+  } | null;
 }
 
 export default function ClientesPage({ session }: ClientesPageProps) {
+  
+  // Acceso definido por rol
   const isAuthorized = session?.rol === "administrador" || session?.rol === "sysadmin";
 
-  const [clientes, setClientes] = useState<ICliente[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+
+  // Estados del formulario unificado
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [form, setForm] = useState({ rut: "", nombre: "", email: "", telefono: "", direccion: "" });
+  const [form, setForm] = useState({
+    rut: "",
+    nombre: "",
+    email: "",
+    telefono: "",
+    direccion: "",
+  });
 
   async function loadClientes() {
     if (!isAuthorized) return;
-    setLoading(true); setError(null);
+    setLoading(true);
+    setError(null);
     try {
-      const data = await clienteApi.list();
-      setClientes(data);
+      const data = await apiRequest<Cliente[]>("/cliente/list_clientes", { auth: true });
+      setClientes(Array.isArray(data) ? data : []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al cargar clientes.");
-    } finally { setLoading(false); }
+      setError(err instanceof Error ? err.message : "Error al descargar el padrón de clientes");
+    } finally {
+      setLoading(false);
+    }
   }
 
-  useEffect(() => { if (isAuthorized) void loadClientes(); }, [isAuthorized]);
+  useEffect(() => {
+    if (isAuthorized) {
+      void loadClientes();
+    }
+  }, [isAuthorized]);
 
+  // Filtro Dinámico Local
   const filteredClientes = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
-    if (!q) return clientes;
-    return clientes.filter((c) =>
-      c.nombre.toLowerCase().includes(q) || c.rut.toLowerCase().includes(q),
+    const query = searchQuery.toLowerCase().trim();
+    if (!query) return clientes;
+    return clientes.filter((c) => 
+      c.nombre.toLowerCase().includes(query) || 
+      c.rut.toLowerCase().includes(query)
     );
   }, [clientes, searchQuery]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!isAuthorized) return;
-    setLoading(true); setError(null); setMessage(null);
+    setLoading(true);
+    setError(null);
+    setMessage(null);
+
     try {
       if (editingId !== null) {
-        await clienteApi.update(editingId, form);
-        setMessage("Cliente actualizado correctamente.");
+        // UPDATE_CLIENTE enviada al Bus
+        await apiRequest(`/cliente/update_cliente/${editingId}`, {
+          method: "PUT",
+          body: form,
+        });
+        setMessage("Datos del cliente actualizados correctamente en el modelo relacional");
       } else {
-        await clienteApi.create(form as any);
-        setMessage("Cliente registrado correctamente.");
+        // CREATE_CLIENTE enviada al Bus
+        await apiRequest("/cliente/create_cliente", {
+          method: "POST",
+          body: form,
+        });
+        setMessage("Nuevo cliente registrado y enrolado en el sistema");
       }
-      cancelEdit();
+      setForm({ rut: "", nombre: "", email: "", telefono: "", direccion: "" });
+      setEditingId(null);
       await loadClientes();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al guardar el cliente.");
-    } finally { setLoading(false); }
+      setError(err instanceof Error ? err.message : "Fallo de aserción en el alta/modificación del registro");
+    } finally {
+      setLoading(false);
+    }
   }
 
-  function startEdit(c: ICliente) {
-    setEditingId(c.id_cliente);
-    setForm({ rut: c.rut, nombre: c.nombre, email: c.email, telefono: c.telefono || "", direccion: c.direccion || "" });
-  }
-
-  function cancelEdit() {
-    setEditingId(null);
-    setForm({ rut: "", nombre: "", email: "", telefono: "", direccion: "" });
+  function startEdit(cliente: Cliente) {
+    setEditingId(cliente.id_cliente);
+    setForm({
+      rut: cliente.rut,
+      nombre: cliente.nombre,
+      email: cliente.email,
+      telefono: cliente.telefono || "",
+      direccion: cliente.direccion || "",
+    });
   }
 
   if (!isAuthorized) {
     return (
-      <div className="flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
+      <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
         <TriangleAlert className="h-5 w-5 shrink-0" />
         <div>
-          <p className="font-semibold">Acceso denegado</p>
-          <p className="text-xs mt-0.5 text-red-600">No tienes permisos para gestionar clientes.</p>
+          <h3 className="font-semibold">Acceso Denegado (403 Privilege Violation)</h3>
+          <p className="text-xs mt-1">Su rol actual no posee los privilegios requeridos para invocar los endpoints transaccionales del subsistema de Clientes.</p>
         </div>
       </div>
     );
@@ -88,67 +135,62 @@ export default function ClientesPage({ session }: ClientesPageProps) {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Clientes</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Administra el registro de clientes del taller.</p>
+          <h2 className="text-2xl font-bold tracking-tight">Gestión del Padrón de Clientes</h2>
+          <p className="text-sm text-muted-foreground">Mantenimiento de entidades e historial de contacto del taller mecánico.</p>
         </div>
-        <Button variant="outline" size="sm" onClick={loadClientes} disabled={loading}>
-          <RefreshCcw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-          Actualizar
+        <Button variant="outline" onClick={loadClientes} disabled={loading}>
+          <RefreshCcw className="h-4 w-4 mr-2" /> Actualizar
         </Button>
       </div>
 
       {message && (
-        <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+        <div className="flex items-center gap-2 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-800">
           <Check className="h-4 w-4 shrink-0" /> {message}
         </div>
       )}
+
       {error && (
-        <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
           <TriangleAlert className="h-4 w-4 shrink-0" /> {error}
         </div>
       )}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
-
-        <Card>
+        <Card className="lg:col-span-1">
           <CardHeader>
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <CardTitle>Clientes registrados</CardTitle>
-                <CardDescription>{filteredClientes.length} resultado{filteredClientes.length !== 1 ? "s" : ""}</CardDescription>
-              </div>
-            </div>
-            <div className="relative mt-3">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <CardTitle>Clientes Registrados</CardTitle>
+            <CardDescription>Búsqueda indexada en memoria para optimización de renderizado.</CardDescription>
+            <div className="relative mt-2">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por nombre o RUT..."
+                placeholder="Filtrar por Nombre completo o RUT..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"
               />
             </div>
           </CardHeader>
-          <CardContent className="p-0">
+          <CardContent>
             <Table>
               <THead>
                 <TR>
                   <TH>RUT</TH>
                   <TH>Nombre</TH>
                   <TH>Contacto</TH>
-                  <TH className="w-12"></TH>
+                  <TH className="text-right">Acciones</TH>
                 </TR>
               </THead>
               <TBody>
-                {filteredClientes.map((c) => (
-                  <TR key={c.id_cliente} className={editingId === c.id_cliente ? "bg-blue-50" : ""}>
-                    <TD><span className="font-mono text-xs text-slate-500">{c.rut}</span></TD>
-                    <TD className="font-medium text-slate-900">{c.nombre}</TD>
-                    <TD>
-                      <p className="text-xs text-slate-500">{c.email}</p>
-                      {c.telefono && <p className="text-xs font-medium text-slate-700">{c.telefono}</p>}
+                {filteredClientes.map((cliente) => (
+                  <TR key={cliente.id_cliente} className="hover:bg-muted/40 transition-colors">
+                    <TD className="font-mono text-xs">{cliente.rut}</TD>
+                    <TD className="font-medium">{cliente.nombre}</TD>
+                    <TD className="text-xs space-y-0.5">
+                      <p className="text-muted-foreground">{cliente.email}</p>
+                      {cliente.telefono && <p className="font-semibold">{cliente.telefono}</p>}
                     </TD>
-                    <TD>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEdit(c)} disabled={loading}>
+                    <TD className="text-right">
+                      <Button variant="ghost" size="sm" onClick={() => startEdit(cliente)} disabled={loading}>
                         <Edit2 className="h-3.5 w-3.5" />
                       </Button>
                     </TD>
@@ -156,8 +198,8 @@ export default function ClientesPage({ session }: ClientesPageProps) {
                 ))}
                 {!filteredClientes.length && (
                   <TR>
-                    <TD colSpan={4} className="h-32 text-center text-slate-400">
-                      {loading ? "Cargando..." : "Sin resultados."}
+                    <TD colSpan={4} className="h-24 text-center text-muted-foreground text-sm">
+                      Ningún cliente coincide con los criterios de búsqueda.
                     </TD>
                   </TR>
                 )}
@@ -168,41 +210,75 @@ export default function ClientesPage({ session }: ClientesPageProps) {
 
         <Card>
           <CardHeader>
-            <CardTitle>{editingId !== null ? "Editar cliente" : "Nuevo cliente"}</CardTitle>
-            <CardDescription>
-              {editingId !== null ? `Modificando cliente #${editingId}` : "Completa los datos para registrar."}
-            </CardDescription>
+            <CardTitle>{editingId !== null ? "Modificar Entidad" : "Enrolar Nuevo Cliente"}</CardTitle>
+            <CardDescription>Valores requeridos para persistencia ACID en Postgres.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              {[
-                { id: "rut", label: "RUT", placeholder: "12345678-K", key: "rut" },
-                { id: "nombre", label: "Nombre completo", placeholder: "Alejandro Marambio", key: "nombre" },
-                { id: "email", label: "Correo electrónico", placeholder: "cliente@ejemplo.cl", key: "email", type: "email" },
-                { id: "telefono", label: "Teléfono (opcional)", placeholder: "+56912345678", key: "telefono" },
-                { id: "direccion", label: "Dirección (opcional)", placeholder: "Av. Ejército 441, Santiago", key: "direccion" },
-              ].map(({ id, label, placeholder, key, type }) => (
-                <div key={id} className="space-y-1.5">
-                  <Label htmlFor={id}>{label}</Label>
-                  <Input
-                    id={id}
-                    type={type ?? "text"}
-                    value={(form as any)[key]}
-                    onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                    placeholder={placeholder}
-                    required={key !== "telefono" && key !== "direccion"}
-                  />
-                </div>
-              ))}
+              <div className="space-y-1">
+                <Label htmlFor="rut">RUT (Con dígito verificador)</Label>
+                <Input
+                  id="rut"
+                  value={form.rut}
+                  onChange={(e) => setForm({ ...form, rut: e.target.value })}
+                  placeholder="12345678-K"
+                  required
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="nombre">Nombre Completo / Razón Social</Label>
+                <Input
+                  id="nombre"
+                  value={form.nombre}
+                  onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+                  placeholder="Ej: Alejandro Marambio"
+                  required
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="email">Correo Electrónico Único</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  placeholder="cliente@repararia.cl"
+                  required
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="telefono">Teléfono Móvil de Contacto</Label>
+                <Input
+                  id="telefono"
+                  value={form.telefono}
+                  onChange={(e) => setForm({ ...form, telefono: e.target.value })}
+                  placeholder="+56912345678"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="direccion">Dirección Particular</Label>
+                <Input
+                  id="direccion"
+                  value={form.direccion}
+                  onChange={(e) => setForm({ ...form, direccion: e.target.value })}
+                  placeholder="Av. Ejército 441, Santiago"
+                />
+              </div>
 
               <div className="flex gap-2 pt-2">
                 <Button className="flex-1" type="submit" disabled={loading}>
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                  {editingId !== null ? "Guardar cambios" : "Registrar cliente"}
+                  {editingId !== null ? "Salvar Cambios" : "Confirmar Enrolamiento"}
                 </Button>
                 {editingId !== null && (
-                  <Button type="button" variant="outline" size="icon" onClick={cancelEdit}>
-                    <X className="h-4 w-4" />
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => {
+                      setEditingId(null);
+                      setForm({ rut: "", nombre: "", email: "", telefono: "", direccion: "" });
+                    }}
+                  >
+                    Cancelar
                   </Button>
                 )}
               </div>

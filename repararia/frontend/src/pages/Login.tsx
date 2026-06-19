@@ -1,8 +1,15 @@
 import { FormEvent, useState } from "react";
-import { Wrench, Search, ArrowRight, Loader2 } from "lucide-react";
+import { LockKeyhole, Search } from "lucide-react";
 
 import { apiRequest, LoginResponse } from "../api/client";
 import { Button } from "../components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 
@@ -21,6 +28,7 @@ export default function LoginPage({ onLogin, onPublicAccess }: Props) {
     event.preventDefault();
     setLoading(true);
     setError(null);
+
     try {
       const data = await apiRequest<LoginResponse>("/auth/login", {
         method: "POST",
@@ -29,127 +37,85 @@ export default function LoginPage({ onLogin, onPublicAccess }: Props) {
       });
       onLogin(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Credenciales incorrectas");
+      setError(err instanceof Error ? err.message : "No fue posible iniciar sesion");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 flex">
-      {/* Left panel */}
-      <div className="hidden lg:flex lg:w-[52%] bg-slate-900 flex-col justify-between p-12">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600">
-            <Wrench className="h-5 w-5 text-white" />
+    <main className="flex min-h-screen items-center justify-center px-4 py-8">
+      <section className="grid w-full max-w-5xl gap-6 lg:grid-cols-[1fr_420px]">
+        <div className="flex flex-col justify-center">
+          <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-md bg-primary text-primary-foreground">
+            <LockKeyhole className="h-6 w-6" />
           </div>
-          <span className="text-white font-semibold text-lg tracking-tight">RepararIA</span>
-        </div>
-
-        <div>
-          <p className="text-slate-400 text-sm font-medium uppercase tracking-widest mb-4">
-            Sistema de gestión
-          </p>
-          <h1 className="text-5xl font-bold text-white leading-tight mb-6">
-            Taller bajo
-            <br />
-            control total.
+          <h1 className="max-w-xl text-4xl font-semibold tracking-normal">
+            RepararIA
           </h1>
-          <p className="text-slate-400 text-lg max-w-md leading-relaxed">
-            Gestiona órdenes, inventario y clientes desde un solo lugar. Diseñado para talleres que no se pueden permitir errores.
+          <p className="mt-3 max-w-xl text-lg text-muted-foreground">
+            Gestion operativa para talleres mecanicos especializados.
           </p>
-
-          <div className="mt-12 grid grid-cols-3 gap-4">
-            {[
-              { label: "Órdenes activas", desc: "Seguimiento en tiempo real" },
-              { label: "Inventario", desc: "Alertas de stock crítico" },
-              { label: "Facturación", desc: "Registro automático de pagos" },
-            ].map((item) => (
-              <div key={item.label} className="border border-slate-800 rounded-xl p-4">
-                <p className="text-white font-semibold text-sm">{item.label}</p>
-                <p className="text-slate-500 text-xs mt-1">{item.desc}</p>
-              </div>
-            ))}
+          <div className="mt-8 grid max-w-2xl gap-3 sm:grid-cols-3">
+            <Metric label="Ordenes" value="Activas" />
+            <Metric label="Inventario" value="Stock" />
+            <Metric label="Clientes" value="Seguimiento" />
           </div>
         </div>
 
-        <p className="text-slate-600 text-xs">
-          © {new Date().getFullYear()} RepararIA · Todos los derechos reservados
-        </p>
-      </div>
-
-      {/* Right panel */}
-      <div className="flex-1 flex items-center justify-center px-6 py-12">
-        <div className="w-full max-w-sm">
-          {/* Mobile logo */}
-          <div className="lg:hidden flex items-center gap-2 mb-8">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
-              <Wrench className="h-4 w-4 text-white" />
-            </div>
-            <span className="font-semibold text-slate-900">RepararIA</span>
-          </div>
-
-          <h2 className="text-2xl font-bold text-slate-900 mb-1">Bienvenido</h2>
-          <p className="text-slate-500 text-sm mb-8">Ingresa tus credenciales para continuar.</p>
-
-          <form className="space-y-4" onSubmit={submit}>
-            <div className="space-y-1.5">
-              <Label htmlFor="email">Correo electrónico</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="nombre@repararia.cl"
-                required
-                autoFocus
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="password">Contraseña</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-              />
-            </div>
-
-            {error && (
-              <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2.5 text-sm text-red-700">
-                {error}
+        <Card>
+          <CardHeader>
+            <CardTitle>Iniciar sesion</CardTitle>
+            <CardDescription>Acceso interno para administradores y mecanicos.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form className="space-y-4" onSubmit={submit}>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  required
+                />
               </div>
-            )}
-
-            <Button className="w-full" type="submit" disabled={loading}>
-              {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <>Ingresar <ArrowRight className="h-4 w-4" /></>
-              )}
-            </Button>
-          </form>
-
-          <div className="mt-4">
-            <Button
-              className="w-full"
-              type="button"
-              variant="outline"
-              onClick={onPublicAccess}
-            >
-              <Search className="h-4 w-4" />
-              Consultar estado de vehículo
-            </Button>
-          </div>
-
-          <p className="mt-8 text-center text-xs text-slate-400">
-            Acceso restringido a personal autorizado
-          </p>
-        </div>
-      </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  required
+                />
+              </div>
+              {error ? <p className="text-sm text-destructive">{error}</p> : null}
+              <Button className="w-full" type="submit" disabled={loading}>
+                {loading ? "Validando..." : "Entrar"}
+              </Button>
+              <Button
+                className="w-full"
+                type="button"
+                variant="outline"
+                onClick={onPublicAccess}
+              >
+                <Search className="h-4 w-4" />
+                Consulta publica
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </section>
     </main>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border bg-white p-4">
+      <p className="text-xs font-medium uppercase text-muted-foreground">{label}</p>
+      <p className="mt-1 text-lg font-semibold">{value}</p>
+    </div>
   );
 }
