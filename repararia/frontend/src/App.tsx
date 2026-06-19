@@ -94,7 +94,11 @@ export default function App() {
   async function handleLogin(data: LoginResponse) {
     setAccessToken(data.token);
     setSession({ userId: data.user.id, rol: data.user.rol, nombre: data.user.nombre });
-    setView("dashboard");
+    if (data.user.rol === "mecanico") {
+      setView("dashboard_mecanico");
+    } else {
+      setView("dashboard");
+}
   }
 
   async function handleLogout() {
