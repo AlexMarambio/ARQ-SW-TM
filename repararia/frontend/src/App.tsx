@@ -34,6 +34,7 @@ import AuditoriaPage from "./pages/admin/Auditoria";
 import UsuariosPage from "./pages/admin/Usuarios";
 import NotificacionesPage from "./pages/admin/Notificaciones";
 import DashboardMecanico from "./pages/mecanico/DashboardMecanico";
+import IaTecnicoPage from "./pages/mecanico/IaTecnico";
 
 type Session = {
   userId: number;
@@ -53,7 +54,8 @@ type View =
   | "notificaciones"
   | "auditoria"
   | "usuarios"
-  | "dashboard_mecanico";
+  | "dashboard_mecanico"
+  | "ia_tecnico";
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -84,6 +86,7 @@ export default function App() {
       return [
         { id: "dashboard_mecanico" as const, label: "Mi Panel", icon: LayoutDashboard },
         { id: "ordenes" as const, label: "Mis Órdenes", icon: Wrench },
+        { id: "ia_tecnico" as const, label: "IA Técnico", icon: MessageSquareCode },
         { id: "publica" as const, label: "Consulta pública", icon: Search },
       ];
     }
@@ -98,7 +101,7 @@ export default function App() {
       setView("dashboard_mecanico");
     } else {
       setView("dashboard");
-}
+    }
   }
 
   async function handleLogout() {
@@ -179,6 +182,7 @@ export default function App() {
         {view === "usuarios" && session && <UsuariosPage session={session} />}
         {/* {view === "notificaciones" && session && <NotificacionesPage session={session} />} */}
         {view === "dashboard_mecanico" && session && <DashboardMecanico session={session} />}
+        {view === "ia_tecnico" && session && <IaTecnicoPage session={session} />}
       </main>
     </div>
   );
