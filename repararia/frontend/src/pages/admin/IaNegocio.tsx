@@ -97,6 +97,41 @@ const CONSULTAS_SUGERIDAS: readonly string[] = [
 const MAX_INPUT_LENGTH = 500;
 
 // ─────────────────────────────────────────────
+// PERSISTENCIA LOCAL DEL HISTORIAL
+// ─────────────────────────────────────────────
+
+const STORAGE_KEY = "repararia_chat_negocio_v1";
+const MAX_MENSAJES_GUARDADOS = 100; // evita que el localStorage crezca sin límite
+
+/** Serializa mensajes a JSON-safe (Date → ISO string) */
+function serializarMensajes(messages: Message[]): string {
+  return JSON.stringify(
+    messages.map((m) => ({ ...m, timestamp: m.timestamp.toISOString() })),
+  );
+}
+
+/** Reconstruye mensajes desde localStorage (ISO string → Date) */
+function deserializarMensajes(raw: string): Message[] {
+  try {
+    const parsed = JSON.parse(raw) as Array<
+      Omit<Message, "timestamp"> & { timestamp: string }
+    >;
+    return parsed.map((m) => ({ ...m, timestamp: new Date(m.timestamp) }));
+  } catch {
+    return [MENSAJE_BIENVENIDA];
+  }
+}
+
+/** Carga el historial guardado, o el mensaje de bienvenida si no hay nada */
+function cargarHistorialInicial(): Message[] {
+  if (typeof window === "undefined") return [MENSAJE_BIENVENIDA];
+  const raw = window.localStorage.getItem(STORAGE_KEY);
+  if (!raw) return [MENSAJE_BIENVENIDA];
+  const mensajes = deserializarMensajes(raw);
+  return mensajes.length > 0 ? mensajes : [MENSAJE_BIENVENIDA];
+}
+
+// ─────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────
 
@@ -106,7 +141,7 @@ export default function IaNegocioPage({ session }: IaNegocioPageProps) {
     session?.rol === "administrador" || session?.rol === "sysadmin";
 
   // ── Estado del chat ───────────────────────
-  const [messages, setMessages] = useState<Message[]>([MENSAJE_BIENVENIDA]);
+  const [messages, setMessages] = useState<Message[]>(cargarHistorialInicial);
   const [input, setInput] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -115,6 +150,20 @@ export default function IaNegocioPage({ session }: IaNegocioPageProps) {
   // ── Referencias DOM ───────────────────────
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    try {
+      // Si supera el límite, conserva solo los más recientes
+      const aGuardar =
+        messages.length > MAX_MENSAJES_GUARDADOS
+          ? messages.slice(-MAX_MENSAJES_GUARDADOS)
+          : messages;
+      window.localStorage.setItem(STORAGE_KEY, serializarMensajes(aGuardar));
+    } catch (err) {
+      // localStorage puede fallar si está lleno o en modo privado estricto
+      console.warn("No se pudo guardar el historial del chat:", err);
+    }
+  }, [messages]);
 
   // ── Auto-scroll al fondo del historial ────
   useEffect(() => {
@@ -152,19 +201,22 @@ export default function IaNegocioPage({ session }: IaNegocioPageProps) {
         // ── Invocación al Bridge del API Gateway ──
         // El Gateway traduce este payload HTTP a una trama binaria JSON
         // e inyecta síncronamente en el socket TCP del Bus SOA (microservicio ia).
-        const data = await apiRequest<RespuestaPayload>("/ia/negocio/consulta",
+        const data = await apiRequest<RespuestaPayload>(
+          "/ia/ia/negocio/consulta",
           {
             method: "POST",
             body: { pregunta: userQuery } satisfies ConsultaPayload,
             auth: true,
-          }
+          },
         );
+
+        const textoNormalizado = normalizarRespuesta(data?.respuesta);
 
         const botMessage: Message = {
           id: `bot-${Date.now()}`,
           sender: "bot",
           text:
-            data?.respuesta ??
+            textoNormalizado ??
             "El microservicio RAG no retornó una respuesta estructurada para esta consulta. Intente reformular la pregunta.",
           timestamp: new Date(),
         };
@@ -181,8 +233,31 @@ export default function IaNegocioPage({ session }: IaNegocioPageProps) {
         setTimeout(() => inputRef.current?.focus(), 50);
       }
     },
-    [input, isAuthorized, loading]
+    [input, isAuthorized, loading],
   );
+
+  function normalizarRespuesta(value: unknown): string {
+    if (typeof value === "string") return value;
+
+    if (Array.isArray(value)) {
+      return value
+        .map((bloque) => {
+          if (typeof bloque === "string") return bloque;
+          if (bloque && typeof bloque === "object" && "text" in bloque) {
+            return String((bloque as { text: unknown }).text ?? "");
+          }
+          return "";
+        })
+        .filter(Boolean)
+        .join("\n");
+    }
+
+    if (value && typeof value === "object" && "text" in value) {
+      return String((value as { text: unknown }).text ?? "");
+    }
+
+    return "";
+  }
 
   /** Atajos de teclado: Ctrl+Enter para enviar */
   const handleKeyDown = useCallback(
@@ -192,20 +267,25 @@ export default function IaNegocioPage({ session }: IaNegocioPageProps) {
         handleSend(null);
       }
     },
-    [handleSend]
+    [handleSend],
   );
 
   /** Limpiar conversación, conservando solo el mensaje de bienvenida */
   const handleClearConversation = useCallback((): void => {
-    setMessages([
-      {
-        ...MENSAJE_BIENVENIDA,
-        // Nuevo timestamp al reiniciar para reflejar la hora real
-        timestamp: new Date(),
-      },
-    ]);
+    const mensajeReiniciado = {
+      ...MENSAJE_BIENVENIDA,
+      timestamp: new Date(),
+    };
+    setMessages([mensajeReiniciado]);
     setError(null);
     setShowSuggestions(true);
+
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // no-op si falla
+    }
+
     setTimeout(() => inputRef.current?.focus(), 50);
   }, []);
 
@@ -214,7 +294,7 @@ export default function IaNegocioPage({ session }: IaNegocioPageProps) {
     (suggestion: string): void => {
       handleSend(null, suggestion);
     },
-    [handleSend]
+    [handleSend],
   );
 
   const charactersLeft = MAX_INPUT_LENGTH - input.length;
@@ -251,7 +331,6 @@ export default function IaNegocioPage({ session }: IaNegocioPageProps) {
   // ─────────────────────────────────────────
   return (
     <div className="space-y-5 max-w-4xl mx-auto">
-
       {/* ── Encabezado de sección ── */}
       <div className="flex items-start justify-between">
         <div>
@@ -262,7 +341,6 @@ export default function IaNegocioPage({ session }: IaNegocioPageProps) {
             Asistente de toma de decisiones basado en inteligencia artificial
           </p>
         </div>
-        
       </div>
 
       {/* ── Banner de error de red ── */}
@@ -289,7 +367,6 @@ export default function IaNegocioPage({ session }: IaNegocioPageProps) {
 
       {/* ── Tarjeta principal ── */}
       <Card className="border shadow-lg overflow-hidden">
-
         {/* ─── Header de la consola ─── */}
         <CardHeader className="border-b py-4 px-5 bg-slate-900">
           <div className="flex items-center justify-between">
@@ -329,7 +406,6 @@ export default function IaNegocioPage({ session }: IaNegocioPageProps) {
         </CardHeader>
 
         <CardContent className="p-0">
-
           {/* ─── Área de burbujas ─── */}
           <div
             ref={scrollRef}
@@ -465,7 +541,9 @@ export default function IaNegocioPage({ session }: IaNegocioPageProps) {
                   ref={inputRef}
                   placeholder="Escriba su consulta analítica (Ej: ¿Cuál es el mecánico con más órdenes este mes?)..."
                   value={input}
-                  onChange={(e) => setInput(e.target.value.slice(0, MAX_INPUT_LENGTH))}
+                  onChange={(e) =>
+                    setInput(e.target.value.slice(0, MAX_INPUT_LENGTH))
+                  }
                   onKeyDown={handleKeyDown}
                   disabled={loading}
                   className="flex-1 text-sm placeholder:text-muted-foreground/60 font-medium placeholder:font-normal"
@@ -516,9 +594,7 @@ export default function IaNegocioPage({ session }: IaNegocioPageProps) {
       </Card>
 
       {/* ── Espacio para algun tipo de nota ── */}
-      <p className="text-[11px] text-muted-foreground/60 text-center font-mono">
-        
-      </p>
+      <p className="text-[11px] text-muted-foreground/60 text-center font-mono"></p>
     </div>
   );
 }
