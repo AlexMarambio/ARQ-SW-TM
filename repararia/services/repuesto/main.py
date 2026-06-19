@@ -45,15 +45,19 @@ def handle_list_repuestos(payload):
     return {"status": "success", "data": repuestos}
 
 def handle_create_repuesto(payload):
+    data = payload.get("payload", {})
+
+
+
     auth = payload.get("auth") or {}
     id_usuario = auth.get("user_id")
-    nombre = payload.get("nombre")
-    descripcion = payload.get("descripcion")
-    sku = payload.get("sku")
-    stock_actual = payload.get("stock_actual", 0)
-    stock_minimo = payload.get("stock_minimo", 5)
-    precio_unitario = payload.get("precio_unitario", 0.0)
-    proveedor = payload.get("proveedor")
+    nombre = data.get("nombre")
+    descripcion = data.get("descripcion")
+    sku = data.get("sku")
+    stock_actual = data.get("stock_actual", 0)
+    stock_minimo = data.get("stock_minimo", 5)
+    precio_unitario = data.get("precio_unitario", 0.0)
+    proveedor = data.get("proveedor")
     
     if not nombre or not sku:
         return {"status": "error", "error_code": "VALIDATION_ERROR", "error_message": "Faltan nombre o sku", "status_code": 400}

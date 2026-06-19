@@ -1,15 +1,34 @@
 import { FormEvent, ReactNode, useEffect, useState } from "react";
-import { CheckCircle2, Plus, RefreshCcw, Save, Wrench, TriangleAlert } from "lucide-react";
+import {
+  CheckCircle2,
+  Plus,
+  RefreshCcw,
+  Save,
+  Wrench,
+  TriangleAlert,
+} from "lucide-react";
 import { apiRequest, Orden, Repuesto } from "../api/client";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Table, TBody, TD, TH, THead, TR } from "../components/ui/table";
 import { Textarea } from "../components/ui/textarea";
 
-const estados = ["pendiente", "en_taller", "en_reparacion", "listo", "entregado"];
+const estados = [
+  "pendiente",
+  "en_taller",
+  "en_reparacion",
+  "listo",
+  "entregado",
+];
 
 export default function OrdenesPage() {
   const [ordenes, setOrdenes] = useState<Orden[]>([]);
@@ -19,6 +38,9 @@ export default function OrdenesPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [clientes, setClientes] = useState<any[]>([]);
+  const [vehiculos, setVehiculos] = useState<any[]>([]);
+  const [mecanicos, setMecanicos] = useState<any[]>([]);
 
   const [newOrden, setNewOrden] = useState({
     id_cliente: "",
@@ -39,31 +61,51 @@ export default function OrdenesPage() {
     setLoading(true);
     setError(null);
     try {
-      const ordenData = await apiRequest<any>("/ordenes/orden_list?limit=100", { auth: true });
-      //setOrdenes(Array.isArray(ordenData) ? ordenData : []);
-      
-      if (ordenData && ordenData.status === "success" && Array.isArray(ordenData.data)) {
-        setOrdenes(ordenData.data);
-      } else {
-        setOrdenes(Array.isArray(ordenData) ? ordenData : []);
-      }
+      const results = await Promise.allSettled([
+        apiRequest<any>("/ordenes/orden_list?limit=100", { auth: true }),
+        apiRequest<any>("/repuesto/list_repuestos?limit=150", { auth: true }),
+        apiRequest<any>("/cliente/list_clientes", { auth: true }),
+        apiRequest<any>("/vehiculo/list_vehiculos", { auth: true }),
+      ]);
 
+      // Verificamos qué pasó con cada una
+      results.forEach((res, index) => {
+        if (res.status === "rejected") {
+          console.error(`Error en petición ${index}:`, res.reason);
+        } else {
+          console.log(`Respuesta ${index}:`, res.value);
+        }
+      });
 
-      const repuestoData = await apiRequest<any>("/repuesto/list_repuestos?limit=150", { auth: true });
-      if (repuestoData && repuestoData.status === "success" && Array.isArray(repuestoData.data)) {
-        setRepuestos(repuestoData.data);
-      } else if (repuestoData && repuestoData.items) {
-        setRepuestos(repuestoData.items);
-      } else {
-        setRepuestos(Array.isArray(repuestoData) ? repuestoData : []);
-      }
+      const [ordenRes, repRes, cliRes, vehRes] = results.map((r) =>
+        r.status === "fulfilled" ? r.value : null,
+      );
+
+      setOrdenes(
+        ordenRes?.data
+          ? ordenRes.data
+          : Array.isArray(ordenRes)
+            ? ordenRes
+            : [],
+      );
+
+      // Procesar Repuestos (si este llega envuelto)
+      setRepuestos(
+        repRes?.data ? repRes.data : Array.isArray(repRes) ? repRes : [],
+      );
+
+      // Procesar Clientes (como este llega directo como array)
+      setClientes(Array.isArray(cliRes) ? cliRes : cliRes?.data || []);
+
+      // Procesar Vehículos (como este llega directo como array)
+      setVehiculos(Array.isArray(vehRes) ? vehRes : vehRes?.data || []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al conectar con la pasarela de servicios");
+      console.error("Error crítico:", err);
+      setError("Error al comunicar con los servicios.");
     } finally {
       setLoading(false);
     }
   }
-
   useEffect(() => {
     void load();
   }, []);
@@ -74,13 +116,14 @@ export default function OrdenesPage() {
     setError(null);
     setMessage(null);
     try {
-
       await apiRequest<Orden>("/ordenes/create_orden", {
         method: "POST",
         body: {
           id_cliente: Number(newOrden.id_cliente),
           id_vehiculo: Number(newOrden.id_vehiculo),
-          id_mecanico: newOrden.id_mecanico ? Number(newOrden.id_mecanico) : null,
+          id_mecanico: newOrden.id_mecanico
+            ? Number(newOrden.id_mecanico)
+            : null,
           descripcion_problema: newOrden.descripcion_problema,
           fecha_estimada: newOrden.fecha_estimada || null,
           costo_mano_obra: Number(newOrden.costo_mano_obra || 0),
@@ -97,7 +140,11 @@ export default function OrdenesPage() {
       setMessage("Solicitud de orden cursada exitosamente al bus nativo");
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Fallo en la comunicación sincrónica TCP");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Fallo en la comunicación sincrónica TCP",
+      );
     } finally {
       setLoading(false);
     }
@@ -116,7 +163,9 @@ export default function OrdenesPage() {
       setMessage(`Estado de la orden #${selected} mutado a ${estado}`);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al actualizar estado");
+      setError(
+        err instanceof Error ? err.message : "Error al actualizar estado",
+      );
     } finally {
       setLoading(false);
     }
@@ -133,14 +182,16 @@ export default function OrdenesPage() {
         method: "POST",
         body: {
           id_repuesto: Number(repuestoForm.id_repuesto),
-          cantidad: Number(repuestoForm.amount), 
+          cantidad: Number(repuestoForm.amount),
         },
       });
       setMessage("Asignación de material consolidada en el inventario");
       setRepuestoForm({ id_repuesto: "", amount: "1" });
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Fallo al asignar repuesto");
+      setError(
+        err instanceof Error ? err.message : "Fallo al asignar repuesto",
+      );
     } finally {
       setLoading(false);
     }
@@ -152,11 +203,19 @@ export default function OrdenesPage() {
     setError(null);
     setMessage(null);
     try {
-      await apiRequest(`/ordenes/close_by/${selected}/cerrar`, { method: "POST" });
-      setMessage(`Orden #${selected} cerrada operativamente. Facturación disparada.`);
+      await apiRequest(`/ordenes/close_by/${selected}/cerrar`, {
+        method: "POST",
+      });
+      setMessage(
+        `Orden #${selected} cerrada operativamente. Facturación disparada.`,
+      );
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al efectuar cierre de orden");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Error al efectuar cierre de orden",
+      );
     } finally {
       setLoading(false);
     }
@@ -167,7 +226,9 @@ export default function OrdenesPage() {
       <section className="space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-2xl font-semibold tracking-tight">Gestión Operativa de Órdenes</h2>
+            <h2 className="text-2xl font-semibold tracking-tight">
+              Gestión Operativa de Órdenes
+            </h2>
             <p className="text-sm text-muted-foreground">
               Panel de control para administración de órdenes de trabajo.
             </p>
@@ -195,7 +256,10 @@ export default function OrdenesPage() {
         <Card>
           <CardHeader>
             <CardTitle>Órdenes de Trabajo en Sistema</CardTitle>
-            <CardDescription>Seleccione un registro para desplegar los comandos transaccionales.</CardDescription>
+            <CardDescription>
+              Seleccione un registro para desplegar los comandos
+              transaccionales.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
@@ -215,15 +279,28 @@ export default function OrdenesPage() {
                     onClick={() => setSelected(orden.id_orden)}
                   >
                     <TD>#{orden.id_orden}</TD>
-                    <TD className="max-w-xs truncate">{orden.descripcion_problema ?? "Sin descripción"}</TD>
-                    <TD><Badge status={orden.estado}>{orden.estado}</Badge></TD>
-                    <TD>{orden.id_mecanico ? `ID Técnico: ${orden.id_mecanico}` : "No asignado"}</TD>
+                    <TD className="max-w-xs truncate">
+                      {orden.descripcion_problema ?? "Sin descripción"}
+                    </TD>
+                    <TD>
+                      <Badge status={orden.estado}>{orden.estado}</Badge>
+                    </TD>
+                    <TD>
+                      {orden.id_mecanico
+                        ? `ID Técnico: ${orden.id_mecanico}`
+                        : "No asignado"}
+                    </TD>
                   </TR>
                 ))}
                 {!ordenes.length && (
                   <TR>
-                    <TD colSpan={4} className="h-24 text-center text-muted-foreground">
-                      {loading ? "Transmitiendo tramas desde el bus..." : "No se registran órdenes activas."}
+                    <TD
+                      colSpan={4}
+                      className="h-24 text-center text-muted-foreground"
+                    >
+                      {loading
+                        ? "Transmitiendo tramas desde el bus..."
+                        : "No se registran órdenes activas."}
                     </TD>
                   </TR>
                 )}
@@ -237,44 +314,73 @@ export default function OrdenesPage() {
         <Card>
           <CardHeader>
             <CardTitle>Apertura de Orden</CardTitle>
-            <CardDescription>Ingreso de parámetros obligatorios al subsistema core.</CardDescription>
+            <CardDescription>
+              Ingreso de parámetros obligatorios al subsistema core.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <form className="space-y-3" onSubmit={createOrden}>
-              <Field label="ID Cliente de Referencia">
-                <Input
+              <Field label="Cliente">
+                <select
+                  className="h-10 w-full rounded-md border bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   value={newOrden.id_cliente}
-                  onChange={(e) => setNewOrden({ ...newOrden, id_cliente: e.target.value })}
-                  type="number"
+                  onChange={(e) =>
+                    setNewOrden({ ...newOrden, id_cliente: e.target.value })
+                  }
                   required
-                />
+                >
+                  <option value="">Seleccione un cliente</option>
+                  {clientes.map((c) => (
+                    <option key={c.id_cliente} value={c.id_cliente}>
+                      {c.nombre} {c.apellido} ({c.rut})
+                    </option>
+                  ))}
+                </select>
               </Field>
-              <Field label="ID Vehículo Identificado">
-                <Input
+              <Field label="Vehículo">
+                <select
+                  className="h-10 w-full rounded-md border bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   value={newOrden.id_vehiculo}
-                  onChange={(e) => setNewOrden({ ...newOrden, id_vehiculo: e.target.value })}
-                  type="number"
+                  onChange={(e) =>
+                    setNewOrden({ ...newOrden, id_vehiculo: e.target.value })
+                  }
                   required
-                />
+                >
+                  <option value="">Seleccione un vehículo</option>
+                  {vehiculos.map((v) => (
+                    <option key={v.id_vehiculo} value={v.id_vehiculo}>
+                      {v.marca} {v.modelo} ({v.patente})
+                    </option>
+                  ))}
+                </select>
               </Field>
               <Field label="ID Mecánico Responsable">
                 <Input
                   value={newOrden.id_mecanico}
-                  onChange={(e) => setNewOrden({ ...newOrden, id_mecanico: e.target.value })}
+                  onChange={(e) =>
+                    setNewOrden({ ...newOrden, id_mecanico: e.target.value })
+                  }
                   type="number"
                 />
               </Field>
               <Field label="Fecha Estimada de Retiro">
                 <Input
                   value={newOrden.fecha_estimada}
-                  onChange={(e) => setNewOrden({ ...newOrden, fecha_estimada: e.target.value })}
+                  onChange={(e) =>
+                    setNewOrden({ ...newOrden, fecha_estimada: e.target.value })
+                  }
                   type="date"
                 />
               </Field>
               <Field label="Valor Mano de Obra (CLP)">
                 <Input
                   value={newOrden.costo_mano_obra}
-                  onChange={(e) => setNewOrden({ ...newOrden, costo_mano_obra: e.target.value })}
+                  onChange={(e) =>
+                    setNewOrden({
+                      ...newOrden,
+                      costo_mano_obra: e.target.value,
+                    })
+                  }
                   type="number"
                   min="0"
                 />
@@ -282,7 +388,12 @@ export default function OrdenesPage() {
               <Field label="Anamnesis / Problema Reportado">
                 <Textarea
                   value={newOrden.descripcion_problema}
-                  onChange={(e) => setNewOrden({ ...newOrden, descripcion_problema: e.target.value })}
+                  onChange={(e) =>
+                    setNewOrden({
+                      ...newOrden,
+                      descripcion_problema: e.target.value,
+                    })
+                  }
                   required
                 />
               </Field>
@@ -298,7 +409,8 @@ export default function OrdenesPage() {
           <CardHeader>
             <CardTitle>Comandos de Estado</CardTitle>
             <CardDescription>
-              Operando sobre orden activa: {selected ? `#${selected}` : "Ninguna seleccionada"}.
+              Operando sobre orden activa:{" "}
+              {selected ? `#${selected}` : "Ninguna seleccionada"}.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -310,7 +422,9 @@ export default function OrdenesPage() {
                 disabled={!selected || loading}
               >
                 {estados.map((item) => (
-                  <option key={item} value={item}>{item}</option>
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
                 ))}
               </select>
             </Field>
@@ -330,7 +444,12 @@ export default function OrdenesPage() {
                   <select
                     className="h-10 w-full rounded-md border bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                     value={repuestoForm.id_repuesto}
-                    onChange={(e) => setRepuestoForm({ ...repuestoForm, id_repuesto: e.target.value })}
+                    onChange={(e) =>
+                      setRepuestoForm({
+                        ...repuestoForm,
+                        id_repuesto: e.target.value,
+                      })
+                    }
                     required
                     disabled={!selected || loading}
                   >
@@ -345,7 +464,12 @@ export default function OrdenesPage() {
                 <Field label="Cantidad Solicitada">
                   <Input
                     value={repuestoForm.amount}
-                    onChange={(e) => setRepuestoForm({ ...repuestoForm, amount: e.target.value })}
+                    onChange={(e) =>
+                      setRepuestoForm({
+                        ...repuestoForm,
+                        amount: e.target.value,
+                      })
+                    }
                     type="number"
                     min="1"
                     required
@@ -385,7 +509,9 @@ export default function OrdenesPage() {
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="space-y-2">
-      <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</Label>
+      <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </Label>
       {children}
     </div>
   );
