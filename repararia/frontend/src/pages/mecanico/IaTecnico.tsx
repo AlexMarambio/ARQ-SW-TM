@@ -22,9 +22,8 @@ import {
   Sparkles,
   ChevronRight,
   Loader2,
-  Wrench,
 } from "lucide-react";
-import { apiRequest } from "../../api/client";
+import { iaTecnicoApi } from "../../api/client";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
@@ -107,17 +106,39 @@ export default function IaTecnicoPage({ session }: Props) {
       setLoading(true);
 
       try {
-        const data = await apiRequest<{ respuesta: string }>("/ia/tecnico/consulta", {
-          method: "POST",
-          body: { pregunta: query, tenant_id: "taller_01" },
-          auth: true,
-        });
+        const data = await iaTecnicoApi.consulta(query, "taller_01") as any;
+        console.log("📡 Respuesta IA (raw):", data);
+
+        let respuestaTexto = "No obtuve una respuesta del sistema.";
+
+        if (data?.respuesta) {
+          if (typeof data.respuesta === "string") {
+            respuestaTexto = data.respuesta;
+          } else if (Array.isArray(data.respuesta)) {
+            // Extraer texto de cada elemento del array
+            const textos = data.respuesta
+              .map((item: any) => {
+                if (typeof item === "string") return item;
+                if (item && typeof item === "object") {
+                  return item.text || item.message || item.content || JSON.stringify(item);
+                }
+                return "";
+              })
+              .filter(Boolean);
+            respuestaTexto = textos.join("\n");
+          } else if (typeof data.respuesta === "object" && data.respuesta !== null) {
+            respuestaTexto =
+              data.respuesta.text ||
+              data.respuesta.message ||
+              data.respuesta.content ||
+              JSON.stringify(data.respuesta);
+          }
+        }
+
         const botMsg: Message = {
           id: `b-${Date.now()}`,
           sender: "bot",
-          text:
-            data?.respuesta ??
-            "No obtuve una respuesta del sistema. Intenta reformular la pregunta.",
+          text: respuestaTexto,
           timestamp: new Date(),
         };
         setMessages((prev) => [...prev, botMsg]);

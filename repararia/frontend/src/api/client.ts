@@ -651,3 +651,25 @@ export type Repuesto = {
   stock_minimo: number;
   precio_unitario: number;
 };
+
+// ─────────────────────────────────────────────────────────────
+// MÓDULO: IA Técnica (asistente para mecánicos)
+// ─────────────────────────────────────────────────────────────
+
+export const iaTecnicoApi = {
+  /**
+   * Consulta al asistente técnico (RAG) sobre manuales y procedimientos.
+   * @param pregunta - Texto de la consulta
+   * @param tenantId - Identificador del taller (por defecto "taller_01")
+   * @returns { respuesta: string }
+   */
+consulta: (pregunta: string, tenantId: string = "taller_01") =>
+    apiRequest<{ respuesta: string | { text?: string; message?: string; content?: string; [key: string]: any } }>(
+      "/ia/tecnico/consulta",
+      {
+        method: "POST",
+        body: { pregunta, tenant_id: tenantId },
+        auth: true,
+      }
+    ),
+};
