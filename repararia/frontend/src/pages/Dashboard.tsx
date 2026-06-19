@@ -1,10 +1,10 @@
-import { RefreshCcw, TriangleAlert } from "lucide-react";
+import { RefreshCcw, TriangleAlert, ClipboardList, Wrench, CheckCircle2, Activity } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { apiRequest, Orden } from "../api/client";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import { Table, TBody, TD, TH, THead, TR } from "../components/ui/table";
 
 interface ApiResponseSOA {
@@ -12,14 +12,8 @@ interface ApiResponseSOA {
   data: Orden[];
 }
 
-type OrdenesResponse = {
-  items: Orden[];
-  total: number;
-};
-
 export default function DashboardPage() {
   const [ordenes, setOrdenes] = useState<Orden[]>([]);
-  //const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -27,151 +21,125 @@ export default function DashboardPage() {
     setLoading(true);
     setError(null);
     try {
-      
-      //const data = await apiRequest<OrdenesResponse>("/ordenes?limite=20");
       const response = await apiRequest<ApiResponseSOA>("/ordenes/orden_list?limit=20", { auth: true });
-      
-      if (response && response.status === "success" && Array.isArray(response.data)) {
+      if (response?.status === "success" && Array.isArray(response.data)) {
         setOrdenes(response.data);
-        //setTotal(response.data.length);
       } else if (Array.isArray(response)) {
-        setOrdenes(response);
-        //setTotal(response.length);
+        setOrdenes(response as any);
       } else {
         setOrdenes([]);
-        //setTotal(0);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudieron cargar ordenes");
+      setError(err instanceof Error ? err.message : "No se pudieron cargar las órdenes");
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => {
-    void load();
-  }, []);
+  useEffect(() => { void load(); }, []);
 
   const stats = useMemo(() => {
     const total = ordenes.length;
-    const active = ordenes.filter((orden) => orden.estado !== "entregado").length;
-    const ready = ordenes.filter((orden) => orden.estado === "listo").length;
-    const repair = ordenes.filter((orden) => orden.estado === "en_reparacion").length;
+    const active = ordenes.filter((o) => o.estado !== "entregado").length;
+    const ready = ordenes.filter((o) => o.estado === "listo").length;
+    const repair = ordenes.filter((o) => o.estado === "en_reparacion").length;
     return { total, active, ready, repair };
   }, [ordenes]);
 
   return (
     <div className="space-y-6">
-      <section className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-2xl font-semibold">Dashboard admin</h2>
-          <p className="text-sm text-muted-foreground">
-            Vista operativa de ordenes activas y carga del taller.
-          </p>
+          <h1 className="text-xl font-semibold text-slate-900">Vista general</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Estado operativo del taller en tiempo real.</p>
         </div>
-        <Button variant="outline" onClick={load} disabled={loading}>
-          <RefreshCcw className="h-4 w-4" />
+        <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+          <RefreshCcw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
           Actualizar
         </Button>
-      </section>
+      </div>
 
-      <section className="grid gap-4 md:grid-cols-4">
-        <Stat title="Total" value={stats.total} />
-        <Stat title="Activas" value={stats.active} />
-        <Stat title="En Reparación" value={stats.repair} />
-        <Stat title="Listos para Entrega" value={stats.ready} />
-      </section>
+      {/* Stats */}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          title="Total órdenes"
+          value={stats.total}
+          icon={<ClipboardList className="h-5 w-5 text-blue-600" />}
+          color="blue"
+        />
+        <StatCard
+          title="Activas"
+          value={stats.active}
+          icon={<Activity className="h-5 w-5 text-amber-600" />}
+          color="amber"
+        />
+        <StatCard
+          title="En reparación"
+          value={stats.repair}
+          icon={<Wrench className="h-5 w-5 text-orange-600" />}
+          color="orange"
+        />
+        <StatCard
+          title="Listos para entrega"
+          value={stats.ready}
+          icon={<CheckCircle2 className="h-5 w-5 text-emerald-600" />}
+          color="emerald"
+        />
+      </div>
 
       {error && (
-        <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+        <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           <TriangleAlert className="h-4 w-4 shrink-0" />
           {error}
         </div>
       )}
 
-      {/* <Card>
+      <Card>
         <CardHeader>
-          <CardTitle>Ordenes activas</CardTitle>
-          <CardDescription>Estado, vehiculo y mecanico asignado.</CardDescription>
+          <CardTitle>Órdenes de trabajo</CardTitle>
+          <CardDescription>Monitoreo de todas las órdenes activas del taller.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           <Table>
             <THead>
               <TR>
                 <TH>ID</TH>
-                <TH>Vehiculo</TH>
+                <TH>Cliente</TH>
+                <TH>Patente</TH>
                 <TH>Estado</TH>
-                <TH>Mecanico</TH>
                 <TH>Ingreso</TH>
-                <TH className="text-right">Costo</TH>
+                <TH className="text-right">Total</TH>
               </TR>
             </THead>
             <TBody>
               {ordenes.map((orden) => (
                 <TR key={orden.id_orden}>
-                  <TD className="font-medium">#{orden.id_orden}</TD>
                   <TD>
-                    {orden.vehiculo?.marca ?? "Vehiculo"} {orden.vehiculo?.modelo ?? ""}
+                    <span className="font-mono text-xs font-semibold text-slate-500">
+                      #{orden.id_orden}
+                    </span>
+                  </TD>
+                  <TD className="font-medium text-slate-900">
+                    {(orden as any).cliente ?? "—"}
                   </TD>
                   <TD>
-                    <Badge status={orden.estado}>{orden.estado}</Badge>
-                  </TD>
-                  <TD>{orden.mecanico ?? orden.id_mecanico ?? "Sin asignar"}</TD>
-                  <TD>{formatDate(orden.fecha_ingreso)}</TD>
-                  <TD className="text-right">{formatMoney(orden.costo_total)}</TD>
-                </TR>
-              ))}
-              {!ordenes.length ? (
-                <TR>
-                  <TD colSpan={6} className="h-24 text-center text-muted-foreground">
-                    {loading ? "Cargando..." : "Sin ordenes para mostrar"}
-                  </TD>
-                </TR>
-              ) : null}
-            </TBody>
-          </Table>
-        </CardContent>
-      </Card> */}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Monitoreo de Órdenes de Trabajo</CardTitle>
-          <CardDescription>Flujo de datos transaccionales en tiempo real.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <THead>
-              <TR>
-                <TH>ID</TH>
-                <TH>Identificación Cliente</TH>
-                <TH>Patente Unidad</TH>
-                <TH>Estado</TH>
-                <TH>Ingreso</TH>
-                <TH className="text-right">Monto Líquido</TH>
-              </TR>
-            </THead>
-            <TBody>
-              {ordenes.map((orden) => (
-                <TR key={orden.id_orden} className="hover:bg-muted/40 transition-colors">
-                  <TD className="font-mono font-bold">#{orden.id_orden}</TD>
-                  {/* Mapea los campos directos devueltos por tu JOIN en handle_list_ordenes */}
-                  <TD className="font-medium">{(orden as any).cliente ?? "Consumidor Final"}</TD>
-                  <TD className="font-mono text-xs">
-                    <span className="bg-slate-100 border px-1.5 py-0.5 rounded text-slate-800">
+                    <span className="font-mono text-xs bg-slate-100 text-slate-700 border border-slate-200 px-2 py-0.5 rounded-md">
                       {(orden as any).patente ?? "S/P"}
                     </span>
                   </TD>
                   <TD>
                     <Badge status={orden.estado}>{orden.estado}</Badge>
                   </TD>
-                  <TD>{formatDate(orden.fecha_ingreso)}</TD>
-                  <TD className="text-right font-mono font-semibold">{formatMoney(orden.costo_total)}</TD>
+                  <TD className="text-slate-500 text-xs">{formatDate(orden.fecha_ingreso)}</TD>
+                  <TD className="text-right font-mono text-sm font-semibold text-slate-900">
+                    {formatMoney(orden.costo_total)}
+                  </TD>
                 </TR>
               ))}
               {!ordenes.length && (
                 <TR>
-                  <TD colSpan={6} className="h-24 text-center text-muted-foreground text-sm">
-                    {loading ? "Leyendo tramas binarias de la SOA..." : "No se registran órdenes para desplegar."}
+                  <TD colSpan={6} className="h-32 text-center text-slate-400">
+                    {loading ? "Cargando órdenes..." : "No hay órdenes registradas."}
                   </TD>
                 </TR>
               )}
@@ -179,29 +147,47 @@ export default function DashboardPage() {
           </Table>
         </CardContent>
       </Card>
-
     </div>
   );
 }
 
-function Stat({ title, value }: { title: string; value: number }) {
+function StatCard({
+  title,
+  value,
+  icon,
+  color,
+}: {
+  title: string;
+  value: number;
+  icon: React.ReactNode;
+  color: string;
+}) {
+  const bgMap: Record<string, string> = {
+    blue: "bg-blue-50",
+    amber: "bg-amber-50",
+    orange: "bg-orange-50",
+    emerald: "bg-emerald-50",
+  };
   return (
     <Card>
-      <CardContent className="p-4">
-        <p className="text-sm text-muted-foreground">{title}</p>
-        <p className="mt-1 text-2xl font-semibold">{value}</p>
+      <CardContent className="p-5">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm text-slate-500">{title}</p>
+          <div className={`p-2 rounded-lg ${bgMap[color] ?? "bg-slate-50"}`}>{icon}</div>
+        </div>
+        <p className="text-3xl font-bold text-slate-900 tabular-nums">{value}</p>
       </CardContent>
     </Card>
   );
 }
 
 function formatDate(value?: string) {
-  if (!value) return "-";
+  if (!value) return "—";
   return new Intl.DateTimeFormat("es-CL").format(new Date(value));
 }
 
 function formatMoney(value?: number) {
-  if (value === undefined || value === null) return "-";
+  if (value == null) return "—";
   return new Intl.NumberFormat("es-CL", {
     style: "currency",
     currency: "CLP",

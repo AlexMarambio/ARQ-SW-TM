@@ -1,16 +1,10 @@
 import { FormEvent, useState } from "react";
-import { CarFront, Search } from "lucide-react";
+import { CarFront, Search, Loader2 } from "lucide-react";
 
 import { apiRequest } from "../api/client";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 
@@ -36,7 +30,6 @@ export default function ConsultaPublicaPage() {
     setLoading(true);
     setError(null);
     setResult(null);
-
     try {
       const data = await apiRequest<PublicOrder>(
         `/ordenes/publica/${encodeURIComponent(token.trim())}`,
@@ -44,93 +37,121 @@ export default function ConsultaPublicaPage() {
       );
       setResult(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se encontro la orden");
+      setError(err instanceof Error ? err.message : "No se encontró la orden.");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="mx-auto grid max-w-4xl gap-6 lg:grid-cols-[360px_1fr]">
-      <Card>
-        <CardHeader>
-          <CardTitle>Consulta publica</CardTitle>
-          <CardDescription>
-            Ingresa el token entregado por el taller.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form className="space-y-4" onSubmit={submit}>
-            <div className="space-y-2">
-              <Label htmlFor="token">Token de acceso</Label>
-              <Input
-                id="token"
-                value={token}
-                onChange={(event) => setToken(event.target.value)}
-                placeholder="UUID de la orden"
-                required
-              />
-            </div>
-            {error ? <p className="text-sm text-destructive">{error}</p> : null}
-            <Button className="w-full" disabled={loading}>
-              <Search className="h-4 w-4" />
-              {loading ? "Consultando..." : "Ver estado"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+    <div className="min-h-screen bg-slate-50 flex items-start justify-center pt-16 px-4">
+      <div className="w-full max-w-2xl space-y-6">
 
-      <section className="rounded-lg border bg-white p-6">
-        {result ? (
-          <div className="space-y-5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Estado actual</p>
-                <h2 className="mt-1 text-2xl font-semibold">
-                  <Badge status={result.estado}>{result.estado}</Badge>
-                </h2>
-              </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-md bg-primary text-primary-foreground">
-                <CarFront className="h-6 w-6" />
-              </div>
-            </div>
+        {/* Header */}
+        <div className="text-center">
+          <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600 mb-4">
+            <CarFront className="h-7 w-7 text-white" />
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900">Consulta de estado</h1>
+          <p className="text-slate-500 text-sm mt-1.5 max-w-sm mx-auto">
+            Ingresa el token que el taller te entregó para ver el estado de tu vehículo.
+          </p>
+        </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Info label="Marca" value={result.vehiculo?.marca} />
-              <Info label="Modelo" value={result.vehiculo?.modelo} />
-              <Info label="Anio" value={result.vehiculo?.anio?.toString()} />
-              <Info label="Color" value={result.vehiculo?.color} />
-              <Info
-                label="Fecha estimada"
-                value={formatDate(result.fecha_estimada)}
-              />
-            </div>
-          </div>
-        ) : (
-          <div className="flex min-h-72 flex-col items-center justify-center text-center">
-            <CarFront className="h-12 w-12 text-muted-foreground" />
-            <h2 className="mt-4 text-xl font-semibold">Estado del vehiculo</h2>
-            <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-              La consulta solo muestra datos operativos no sensibles. No usa patente,
-              RUT ni nombre del cliente.
-            </p>
-          </div>
+        {/* Search card */}
+        <Card>
+          <CardContent className="p-6">
+            <form className="flex gap-3" onSubmit={submit}>
+              <div className="flex-1 space-y-1.5">
+                <Label htmlFor="token">Token de seguimiento</Label>
+                <Input
+                  id="token"
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                  placeholder="Ej: a3f8c2d1-..."
+                  required
+                />
+              </div>
+              <div className="flex items-end">
+                <Button type="submit" disabled={loading}>
+                  {loading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Search className="h-4 w-4" />
+                  )}
+                  Buscar
+                </Button>
+              </div>
+            </form>
+
+            {error && (
+              <div className="mt-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                {error}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Result */}
+        {result && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <CardDescription>Estado actual del vehículo</CardDescription>
+                  <div className="mt-2">
+                    <Badge status={result.estado} className="text-sm px-3 py-1">
+                      {result.estado}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50">
+                  <CarFront className="h-5 w-5 text-blue-600" />
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <InfoCell label="Marca" value={result.vehiculo?.marca} />
+                <InfoCell label="Modelo" value={result.vehiculo?.modelo} />
+                <InfoCell label="Año" value={result.vehiculo?.anio?.toString()} />
+                <InfoCell label="Color" value={result.vehiculo?.color} />
+                <InfoCell
+                  label="Retiro estimado"
+                  value={result.fecha_estimada
+                    ? new Intl.DateTimeFormat("es-CL").format(new Date(result.fecha_estimada))
+                    : undefined}
+                  span={2}
+                />
+              </div>
+
+              <p className="mt-5 text-xs text-slate-400 border-t border-slate-100 pt-4">
+                Esta consulta solo muestra información operativa. No incluye datos personales del cliente.
+              </p>
+            </CardContent>
+          </Card>
         )}
-      </section>
+      </div>
     </div>
   );
 }
 
-function Info({ label, value }: { label: string; value?: string | null }) {
+function InfoCell({
+  label,
+  value,
+  span,
+}: {
+  label: string;
+  value?: string | null;
+  span?: number;
+}) {
   return (
-    <div className="rounded-md border bg-muted/30 p-3">
-      <p className="text-xs font-medium uppercase text-muted-foreground">{label}</p>
-      <p className="mt-1 font-medium">{value || "-"}</p>
+    <div
+      className="rounded-lg bg-slate-50 border border-slate-100 p-3"
+      style={span ? { gridColumn: `span ${span}` } : undefined}
+    >
+      <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-slate-900">{value || "—"}</p>
     </div>
   );
-}
-
-function formatDate(value?: string | null) {
-  if (!value) return "-";
-  return new Intl.DateTimeFormat("es-CL").format(new Date(value));
 }
