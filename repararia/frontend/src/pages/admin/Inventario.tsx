@@ -17,18 +17,10 @@ import {
   CardTitle,
 } from "../../components/ui/card";
 import { Table, TBody, TD, TH, THead, TR } from "../../components/ui/table";
-import { Badge } from "../../components/ui/badge";
 import { Input } from "../../components/ui/input";
 
-interface Repuesto {
-  id_repuesto: number;
-  codigo: string;
-  nombre: string;
-  descripcion?: string;
-  stock_actual: number;
-  stock_minimo: number;
-  precio_unitario: number;
-  proveedor?: string;
+interface Props {
+  session: { rol: "administrador" | "mecanico" | "sysadmin"; userId: number } | null;
 }
 
 interface InventarioPageProps {
@@ -42,15 +34,15 @@ export default function InventarioPage({ session }: InventarioPageProps) {
   const isAuthorized =
     session?.rol === "administrador" || session?.rol === "sysadmin";
 
-  const [repuestos, setRepuestos] = useState<Repuesto[]>([]);
-  const [alertas, setAlertas] = useState<Repuesto[]>([]);
+  const [repuestos, setRepuestos] = useState<IRepuesto[]>([]);
+  const [alertas, setAlertas] = useState<IRepuesto[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   // Estado para el manejo inline de ajustes rapidos de stock
   const [updatingId, setUpdatingId] = useState<number | null>(null);
-  const [stockValue, setStockValue] = useState<string>("");
+  const [stockValue, setStockValue] = useState("");
 
   const [isAdding, setIsAdding] = useState(false);
   const [formData, setFormData] = useState({
@@ -128,17 +120,10 @@ export default function InventarioPage({ session }: InventarioPageProps) {
     }
   }
 
-  useEffect(() => {
-    if (isAuthorized) {
-      void loadInventario();
-    }
-  }, [isAuthorized]);
+  useEffect(() => { if (isAuthorized) void loadInventario(); }, [isAuthorized]);
 
   async function patchStock(id_repuesto: number, nuevoStock: number) {
-    if (!isAuthorized) return;
-    setLoading(true);
-    setError(null);
-    setMessage(null);
+    setLoading(true); setError(null); setMessage(null);
     try {
       await apiRequest(`/repuesto/ajustar_stock_by/${id_repuesto}`, {
         method: "PUT",
@@ -162,7 +147,7 @@ export default function InventarioPage({ session }: InventarioPageProps) {
 
   if (!isAuthorized) {
     return (
-      <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+      <div className="flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
         <TriangleAlert className="h-5 w-5 shrink-0" />
         <div>
           <h3 className="font-semibold">
@@ -189,8 +174,9 @@ export default function InventarioPage({ session }: InventarioPageProps) {
             reposición.
           </p>
         </div>
-        <Button variant="outline" onClick={loadInventario} disabled={loading}>
-          <RefreshCcw className="h-4 w-4 mr-2" /> Actualizar
+        <Button variant="outline" size="sm" onClick={loadInventario} disabled={loading}>
+          <RefreshCcw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+          Actualizar
         </Button>
       </div>
 
@@ -246,13 +232,12 @@ export default function InventarioPage({ session }: InventarioPageProps) {
       )}
 
       {message && (
-        <div className="flex items-center gap-2 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-800">
+        <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
           <Check className="h-4 w-4 shrink-0" /> {message}
         </div>
       )}
-
       {error && (
-        <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+        <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           <TriangleAlert className="h-4 w-4 shrink-0" /> {error}
         </div>
       )}
@@ -382,7 +367,7 @@ export default function InventarioPage({ session }: InventarioPageProps) {
                             }}
                             disabled={loading}
                           >
-                            Forzar Ajuste
+                            {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
                           </Button>
                         )}
                       </TD>
@@ -404,12 +389,22 @@ export default function InventarioPage({ session }: InventarioPageProps) {
                       </div>
                     </TD>
                   </TR>
-                )}
-              </TBody>
-            </Table>
-          </CardContent>
-        </Card>
-      </div>
+                );
+              })}
+              {!repuestos.length && (
+                <TR>
+                  <TD colSpan={5} className="h-32 text-center text-slate-400">
+                    <div className="flex flex-col items-center gap-2">
+                      <Package className="h-8 w-8 text-slate-300" />
+                      {loading ? "Cargando inventario..." : "Sin repuestos catalogados."}
+                    </div>
+                  </TD>
+                </TR>
+              )}
+            </TBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 }
