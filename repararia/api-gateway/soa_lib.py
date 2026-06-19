@@ -1,4 +1,5 @@
 import socket
+import select
 
 def connect_to_bus(host='localhost', port=5000):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -29,3 +30,15 @@ def receive_message(sock):
         data += chunk
     return data
 
+def flush_socket(sock):
+    # Drena todo lo que haya quedado pendiente en el socket
+    while True:
+        try:
+            # select.select verifica si hay datos esperando en el socket
+            ready = select.select([sock], [], [], 0.01)
+            if ready[0]:
+                sock.recv(4096)
+            else:
+                break
+        except:
+            break

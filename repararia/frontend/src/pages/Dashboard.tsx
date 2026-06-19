@@ -13,6 +13,11 @@ import {
 } from "../components/ui/card";
 import { Table, TBody, TD, TH, THead, TR } from "../components/ui/table";
 
+interface ApiResponseSOA {
+  status: string;
+  data: Orden[];
+}
+
 type OrdenesResponse = {
   items: Orden[];
   total: number;
@@ -20,7 +25,7 @@ type OrdenesResponse = {
 
 export default function DashboardPage() {
   const [ordenes, setOrdenes] = useState<Orden[]>([]);
-  const [total, setTotal] = useState(0);
+  //const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -28,11 +33,30 @@ export default function DashboardPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiRequest<OrdenesResponse>("/ordenes?limite=20");
-      setOrdenes(data.items ?? []);
-      setTotal(data.total ?? 0);
+      //const data = await apiRequest<OrdenesResponse>("/ordenes?limite=20");
+      const response = await apiRequest<ApiResponseSOA>(
+        "/ordenes/orden_list?limit=20",
+        { auth: true },
+      );
+
+      if (
+        response &&
+        response.status === "success" &&
+        Array.isArray(response.data)
+      ) {
+        setOrdenes(response.data);
+        //setTotal(response.data.length);
+      } else if (Array.isArray(response)) {
+        setOrdenes(response);
+        //setTotal(response.length);
+      } else {
+        setOrdenes([]);
+        //setTotal(0);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudieron cargar ordenes");
+      setError(
+        err instanceof Error ? err.message : "No se pudieron cargar ordenes",
+      );
     } finally {
       setLoading(false);
     }
@@ -43,17 +67,22 @@ export default function DashboardPage() {
   }, []);
 
   const stats = useMemo(() => {
-    const active = ordenes.filter((orden) => orden.estado !== "entregado").length;
+    const total = ordenes.length;
+    const active = ordenes.filter(
+      (orden) => orden.estado !== "entregado",
+    ).length;
     const ready = ordenes.filter((orden) => orden.estado === "listo").length;
-    const repair = ordenes.filter((orden) => orden.estado === "en_reparacion").length;
-    return { active, ready, repair };
+    const repair = ordenes.filter(
+      (orden) => orden.estado === "en_reparacion",
+    ).length;
+    return { total, active, ready, repair };
   }, [ordenes]);
 
   return (
     <div className="space-y-6">
       <section className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-2xl font-semibold">Dashboard admin</h2>
+          <h2 className="text-2xl font-semibold">Dashboard Administrador</h2>
           <p className="text-sm text-muted-foreground">
             Vista operativa de ordenes activas y carga del taller.
           </p>
@@ -65,20 +94,20 @@ export default function DashboardPage() {
       </section>
 
       <section className="grid gap-4 md:grid-cols-4">
-        <Stat title="Total" value={total} />
+        <Stat title="Total" value={stats.total} />
         <Stat title="Activas" value={stats.active} />
-        <Stat title="En reparacion" value={stats.repair} />
-        <Stat title="Listas" value={stats.ready} />
+        <Stat title="En Reparación" value={stats.repair} />
+        <Stat title="Listos para Entrega" value={stats.ready} />
       </section>
 
-      {error ? (
+      {error && (
         <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-          <TriangleAlert className="h-4 w-4" />
+          <TriangleAlert className="h-4 w-4 shrink-0" />
           {error}
         </div>
-      ) : null}
+      )}
 
-      <Card>
+      {/* <Card>
         <CardHeader>
           <CardTitle>Ordenes activas</CardTitle>
           <CardDescription>Estado, vehiculo y mecanico asignado.</CardDescription>
@@ -117,6 +146,67 @@ export default function DashboardPage() {
                   </TD>
                 </TR>
               ) : null}
+            </TBody>
+          </Table>
+        </CardContent>
+      </Card> */}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Monitoreo de Órdenes de Trabajo</CardTitle>
+          <CardDescription>
+            Flujo de datos transaccionales en tiempo real.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <THead>
+              <TR>
+                <TH>ID</TH>
+                <TH>Identificación Cliente</TH>
+                <TH>Patente Unidad</TH>
+                <TH>Estado</TH>
+                <TH>Ingreso</TH>
+                <TH className="text-right">Monto Líquido</TH>
+              </TR>
+            </THead>
+            <TBody>
+              {ordenes.map((orden) => (
+                <TR
+                  key={orden.id_orden}
+                  className="hover:bg-muted/40 transition-colors"
+                >
+                  <TD className="font-mono font-bold">#{orden.id_orden}</TD>
+                  {/* Mapea los campos directos devueltos por tu JOIN en handle_list_ordenes */}
+                  <TD className="font-medium">
+                    {(orden as any).cliente ?? "Consumidor Final"}
+                  </TD>
+                  <TD className="font-mono text-xs">
+                    <span className="bg-slate-100 border px-1.5 py-0.5 rounded text-slate-800">
+                      {(orden as any).patente ?? "S/P"}
+                    </span>
+                  </TD>
+                  <TD>
+                    <Badge status={orden.estado}>{orden.estado}</Badge>
+                  </TD>
+                  <TD>{formatDate(orden.fecha_ingreso)}</TD>
+                  <TD className="text-right font-mono font-semibold">
+                    {formatMoney(orden.costo_total)}
+                  </TD>
+                </TR>
+              ))}
+              {!ordenes.length && (
+                <TR>
+                  <TD
+                    colSpan={6}
+                    className="h-24 text-center text-muted-foreground text-sm"
+                  >
+                    {loading
+                      ? "Leyendo tramas binarias de la SOA..."
+                      : "No se registran órdenes para desplegar."}
+                  </TD>
+                </TR>
+              )}
             </TBody>
           </Table>
         </CardContent>

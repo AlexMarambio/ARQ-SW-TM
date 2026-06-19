@@ -1,6 +1,12 @@
 import { FormEvent, ReactNode, useEffect, useState } from "react";
-import { CheckCircle2, Plus, RefreshCcw, Save, Wrench } from "lucide-react";
-
+import {
+  CheckCircle2,
+  Plus,
+  RefreshCcw,
+  Save,
+  Wrench,
+  TriangleAlert,
+} from "lucide-react";
 import { apiRequest, Orden, Repuesto } from "../api/client";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -16,17 +22,13 @@ import { Label } from "../components/ui/label";
 import { Table, TBody, TD, TH, THead, TR } from "../components/ui/table";
 import { Textarea } from "../components/ui/textarea";
 
-type OrdenesResponse = {
-  items: Orden[];
-  total: number;
-};
-
-type RepuestosResponse = {
-  items: Repuesto[];
-  total: number;
-};
-
-const estados = ["pendiente", "en_taller", "en_reparacion", "listo", "entregado"];
+const estados = [
+  "pendiente",
+  "en_taller",
+  "en_reparacion",
+  "listo",
+  "entregado",
+];
 
 export default function OrdenesPage() {
   const [ordenes, setOrdenes] = useState<Orden[]>([]);
@@ -36,6 +38,9 @@ export default function OrdenesPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [clientes, setClientes] = useState<any[]>([]);
+  const [vehiculos, setVehiculos] = useState<any[]>([]);
+  const [mecanicos, setMecanicos] = useState<any[]>([]);
 
   const [newOrden, setNewOrden] = useState({
     id_cliente: "",
@@ -48,40 +53,77 @@ export default function OrdenesPage() {
 
   const [repuestoForm, setRepuestoForm] = useState({
     id_repuesto: "",
-    cantidad: "1",
+    //cantidad: "1",
+    amount: "1", //
   });
 
   async function load() {
     setLoading(true);
     setError(null);
     try {
-      const [ordenData, repuestoData] = await Promise.all([
-        apiRequest<OrdenesResponse>("/ordenes?limite=30"),
-        apiRequest<RepuestosResponse>("/repuestos?limite=50"),
+      const results = await Promise.allSettled([
+        apiRequest<any>("/ordenes/orden_list?limit=100", { auth: true }),
+        apiRequest<any>("/repuesto/list_repuestos?limit=150", { auth: true }),
+        apiRequest<any>("/cliente/list_clientes", { auth: true }),
+        apiRequest<any>("/vehiculo/list_vehiculos", { auth: true }),
       ]);
-      setOrdenes(ordenData.items ?? []);
-      setRepuestos(repuestoData.items ?? []);
-      setSelected((current) => current ?? ordenData.items?.[0]?.id_orden ?? null);
+
+      // Verificamos qué pasó con cada una
+      results.forEach((res, index) => {
+        if (res.status === "rejected") {
+          console.error(`Error en petición ${index}:`, res.reason);
+        } else {
+          console.log(`Respuesta ${index}:`, res.value);
+        }
+      });
+
+      const [ordenRes, repRes, cliRes, vehRes] = results.map((r) =>
+        r.status === "fulfilled" ? r.value : null,
+      );
+
+      setOrdenes(
+        ordenRes?.data
+          ? ordenRes.data
+          : Array.isArray(ordenRes)
+            ? ordenRes
+            : [],
+      );
+
+      // Procesar Repuestos (si este llega envuelto)
+      setRepuestos(
+        repRes?.data ? repRes.data : Array.isArray(repRes) ? repRes : [],
+      );
+
+      // Procesar Clientes (como este llega directo como array)
+      setClientes(Array.isArray(cliRes) ? cliRes : cliRes?.data || []);
+
+      // Procesar Vehículos (como este llega directo como array)
+      setVehiculos(Array.isArray(vehRes) ? vehRes : vehRes?.data || []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No fue posible cargar datos");
+      console.error("Error crítico:", err);
+      setError("Error al comunicar con los servicios.");
     } finally {
       setLoading(false);
     }
   }
-
   useEffect(() => {
     void load();
   }, []);
 
   async function createOrden(event: FormEvent) {
     event.preventDefault();
-    await runAction(async () => {
-      await apiRequest("/ordenes", {
+    setLoading(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await apiRequest<Orden>("/ordenes/create_orden", {
         method: "POST",
         body: {
           id_cliente: Number(newOrden.id_cliente),
           id_vehiculo: Number(newOrden.id_vehiculo),
-          id_mecanico: newOrden.id_mecanico ? Number(newOrden.id_mecanico) : null,
+          id_mecanico: newOrden.id_mecanico
+            ? Number(newOrden.id_mecanico)
+            : null,
           descripcion_problema: newOrden.descripcion_problema,
           fecha_estimada: newOrden.fecha_estimada || null,
           costo_mano_obra: Number(newOrden.costo_mano_obra || 0),
@@ -95,57 +137,85 @@ export default function OrdenesPage() {
         fecha_estimada: "",
         costo_mano_obra: "0",
       });
-      setMessage("Orden creada");
+      setMessage("Solicitud de orden cursada exitosamente al bus nativo");
       await load();
-    });
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Fallo en la comunicación sincrónica TCP",
+      );
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function cambiarEstado() {
     if (!selected) return;
-    await runAction(async () => {
-      await apiRequest(`/ordenes/${selected}/estado`, {
+    setLoading(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await apiRequest(`/ordenes/change_by/${selected}/estado`, {
         method: "PATCH",
-        body: { nuevo_estado: estado },
+        body: { estado: estado },
       });
-      setMessage("Estado actualizado");
+      setMessage(`Estado de la orden #${selected} mutado a ${estado}`);
       await load();
-    });
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Error al actualizar estado",
+      );
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function agregarRepuesto(event: FormEvent) {
     event.preventDefault();
     if (!selected) return;
-    await runAction(async () => {
-      await apiRequest(`/ordenes/${selected}/repuestos`, {
-        method: "POST",
-        body: {
-          id_repuesto: Number(repuestoForm.id_repuesto),
-          cantidad: Number(repuestoForm.cantidad),
-        },
-      });
-      setMessage("Repuesto agregado");
-      setRepuestoForm({ id_repuesto: "", cantidad: "1" });
-      await load();
-    });
-  }
-
-  async function cerrarOrden() {
-    if (!selected) return;
-    await runAction(async () => {
-      await apiRequest(`/ordenes/${selected}/cerrar`, { method: "POST" });
-      setMessage("Orden cerrada y factura generada");
-      await load();
-    });
-  }
-
-  async function runAction(action: () => Promise<void>) {
     setLoading(true);
     setError(null);
     setMessage(null);
     try {
-      await action();
+      await apiRequest(`/ordenes/add_by/${selected}/repuestos`, {
+        method: "POST",
+        body: {
+          id_repuesto: Number(repuestoForm.id_repuesto),
+          cantidad: Number(repuestoForm.amount),
+        },
+      });
+      setMessage("Asignación de material consolidada en el inventario");
+      setRepuestoForm({ id_repuesto: "", amount: "1" });
+      await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "La accion fallo");
+      setError(
+        err instanceof Error ? err.message : "Fallo al asignar repuesto",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function cerrarOrden() {
+    if (!selected) return;
+    setLoading(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await apiRequest(`/ordenes/close_by/${selected}/cerrar`, {
+        method: "POST",
+      });
+      setMessage(
+        `Orden #${selected} cerrada operativamente. Facturación disparada.`,
+      );
+      await load();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Error al efectuar cierre de orden",
+      );
     } finally {
       setLoading(false);
     }
@@ -156,70 +226,84 @@ export default function OrdenesPage() {
       <section className="space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-2xl font-semibold">Gestion de ordenes</h2>
+            <h2 className="text-2xl font-semibold tracking-tight">
+              Gestión Operativa de Órdenes
+            </h2>
             <p className="text-sm text-muted-foreground">
-              Crear, cambiar estado, agregar repuestos y cerrar ordenes.
+              Panel de control para administración de órdenes de trabajo.
             </p>
           </div>
           <Button variant="outline" onClick={load} disabled={loading}>
-            <RefreshCcw className="h-4 w-4" />
+            <RefreshCcw className="h-4 w-4 mr-2" />
             Actualizar
           </Button>
         </div>
 
-        {message ? (
+        {message && (
           <div className="flex items-center gap-2 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-800">
-            <CheckCircle2 className="h-4 w-4" />
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
             {message}
           </div>
-        ) : null}
-        {error ? (
-          <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+        )}
+
+        {error && (
+          <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+            <TriangleAlert className="h-4 w-4 shrink-0" />
             {error}
           </div>
-        ) : null}
+        )}
 
         <Card>
           <CardHeader>
-            <CardTitle>Ordenes</CardTitle>
-            <CardDescription>Selecciona una orden para operar sobre ella.</CardDescription>
+            <CardTitle>Órdenes de Trabajo en Sistema</CardTitle>
+            <CardDescription>
+              Seleccione un registro para desplegar los comandos
+              transaccionales.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
               <THead>
                 <TR>
                   <TH>ID</TH>
-                  <TH>Problema</TH>
+                  <TH>Descripción del Problema</TH>
                   <TH>Estado</TH>
-                  <TH>Token publico</TH>
+                  <TH>Mecánico Asignado</TH>
                 </TR>
               </THead>
               <TBody>
                 {ordenes.map((orden) => (
                   <TR
                     key={orden.id_orden}
-                    className={selected === orden.id_orden ? "bg-muted" : undefined}
+                    className={`cursor-pointer transition-colors ${selected === orden.id_orden ? "bg-muted font-medium" : "hover:bg-muted/40"}`}
                     onClick={() => setSelected(orden.id_orden)}
                   >
-                    <TD className="font-medium">#{orden.id_orden}</TD>
-                    <TD className="max-w-sm truncate">
-                      {orden.descripcion_problema ?? "Sin descripcion"}
+                    <TD>#{orden.id_orden}</TD>
+                    <TD className="max-w-xs truncate">
+                      {orden.descripcion_problema ?? "Sin descripción"}
                     </TD>
                     <TD>
                       <Badge status={orden.estado}>{orden.estado}</Badge>
                     </TD>
-                    <TD className="max-w-48 truncate text-muted-foreground">
-                      {orden.token_acceso_publico ?? "-"}
+                    <TD>
+                      {orden.id_mecanico
+                        ? `ID Técnico: ${orden.id_mecanico}`
+                        : "No asignado"}
                     </TD>
                   </TR>
                 ))}
-                {!ordenes.length ? (
+                {!ordenes.length && (
                   <TR>
-                    <TD colSpan={4} className="h-24 text-center text-muted-foreground">
-                      {loading ? "Cargando..." : "Sin ordenes"}
+                    <TD
+                      colSpan={4}
+                      className="h-24 text-center text-muted-foreground"
+                    >
+                      {loading
+                        ? "Transmitiendo tramas desde el bus..."
+                        : "No se registran órdenes activas."}
                     </TD>
                   </TR>
-                ) : null}
+                )}
               </TBody>
             </Table>
           </CardContent>
@@ -229,74 +313,93 @@ export default function OrdenesPage() {
       <aside className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle>Nueva orden</CardTitle>
-            <CardDescription>Datos minimos del ingreso al taller.</CardDescription>
+            <CardTitle>Apertura de Orden</CardTitle>
+            <CardDescription>
+              Ingreso de parámetros obligatorios al subsistema core.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <form className="space-y-3" onSubmit={createOrden}>
-              <Field label="ID cliente">
-                <Input
+              <Field label="Cliente">
+                <select
+                  className="h-10 w-full rounded-md border bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   value={newOrden.id_cliente}
-                  onChange={(event) =>
-                    setNewOrden({ ...newOrden, id_cliente: event.target.value })
+                  onChange={(e) =>
+                    setNewOrden({ ...newOrden, id_cliente: e.target.value })
                   }
-                  type="number"
                   required
-                />
+                >
+                  <option value="">Seleccione un cliente</option>
+                  {clientes.map((c) => (
+                    <option key={c.id_cliente} value={c.id_cliente}>
+                      {c.nombre} {c.apellido} ({c.rut})
+                    </option>
+                  ))}
+                </select>
               </Field>
-              <Field label="ID vehiculo">
-                <Input
+              <Field label="Vehículo">
+                <select
+                  className="h-10 w-full rounded-md border bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   value={newOrden.id_vehiculo}
-                  onChange={(event) =>
-                    setNewOrden({ ...newOrden, id_vehiculo: event.target.value })
+                  onChange={(e) =>
+                    setNewOrden({ ...newOrden, id_vehiculo: e.target.value })
                   }
-                  type="number"
                   required
-                />
+                >
+                  <option value="">Seleccione un vehículo</option>
+                  {vehiculos.map((v) => (
+                    <option key={v.id_vehiculo} value={v.id_vehiculo}>
+                      {v.marca} {v.modelo} ({v.patente})
+                    </option>
+                  ))}
+                </select>
               </Field>
-              <Field label="ID mecanico">
+              <Field label="ID Mecánico Responsable">
                 <Input
                   value={newOrden.id_mecanico}
-                  onChange={(event) =>
-                    setNewOrden({ ...newOrden, id_mecanico: event.target.value })
+                  onChange={(e) =>
+                    setNewOrden({ ...newOrden, id_mecanico: e.target.value })
                   }
                   type="number"
                 />
               </Field>
-              <Field label="Fecha estimada">
+              <Field label="Fecha Estimada de Retiro">
                 <Input
                   value={newOrden.fecha_estimada}
-                  onChange={(event) =>
-                    setNewOrden({ ...newOrden, fecha_estimada: event.target.value })
+                  onChange={(e) =>
+                    setNewOrden({ ...newOrden, fecha_estimada: e.target.value })
                   }
                   type="date"
                 />
               </Field>
-              <Field label="Mano de obra">
+              <Field label="Valor Mano de Obra (CLP)">
                 <Input
                   value={newOrden.costo_mano_obra}
-                  onChange={(event) =>
-                    setNewOrden({ ...newOrden, costo_mano_obra: event.target.value })
+                  onChange={(e) =>
+                    setNewOrden({
+                      ...newOrden,
+                      costo_mano_obra: e.target.value,
+                    })
                   }
                   type="number"
                   min="0"
                 />
               </Field>
-              <Field label="Problema">
+              <Field label="Anamnesis / Problema Reportado">
                 <Textarea
                   value={newOrden.descripcion_problema}
-                  onChange={(event) =>
+                  onChange={(e) =>
                     setNewOrden({
                       ...newOrden,
-                      descripcion_problema: event.target.value,
+                      descripcion_problema: e.target.value,
                     })
                   }
                   required
                 />
               </Field>
               <Button className="w-full" disabled={loading}>
-                <Plus className="h-4 w-4" />
-                Crear orden
+                <Plus className="h-4 w-4 mr-2" />
+                Aperturar Orden
               </Button>
             </form>
           </CardContent>
@@ -304,17 +407,19 @@ export default function OrdenesPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Operacion</CardTitle>
+            <CardTitle>Comandos de Estado</CardTitle>
             <CardDescription>
-              Orden seleccionada: {selected ? `#${selected}` : "ninguna"}.
+              Operando sobre orden activa:{" "}
+              {selected ? `#${selected}` : "Ninguna seleccionada"}.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Field label="Nuevo estado">
+            <Field label="Transición de Estado Técnico">
               <select
-                className="h-10 w-full rounded-md border bg-white px-3 text-sm"
+                className="h-10 w-full rounded-md border bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 value={estado}
-                onChange={(event) => setEstado(event.target.value)}
+                onChange={(e) => setEstado(e.target.value)}
+                disabled={!selected || loading}
               >
                 {estados.map((item) => (
                   <option key={item} value={item}>
@@ -329,59 +434,71 @@ export default function OrdenesPage() {
               onClick={cambiarEstado}
               disabled={!selected || loading}
             >
-              <Save className="h-4 w-4" />
-              Cambiar estado
+              <Save className="h-4 w-4 mr-2" />
+              Actualizar Estado
             </Button>
 
-            <form className="space-y-3" onSubmit={agregarRepuesto}>
-              <Field label="Repuesto">
-                <select
-                  className="h-10 w-full rounded-md border bg-white px-3 text-sm"
-                  value={repuestoForm.id_repuesto}
-                  onChange={(event) =>
-                    setRepuestoForm({ ...repuestoForm, id_repuesto: event.target.value })
-                  }
-                  required
+            <div className="border-t pt-4">
+              <form className="space-y-3" onSubmit={agregarRepuesto}>
+                <Field label="Asignar Repuesto del Stock">
+                  <select
+                    className="h-10 w-full rounded-md border bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    value={repuestoForm.id_repuesto}
+                    onChange={(e) =>
+                      setRepuestoForm({
+                        ...repuestoForm,
+                        id_repuesto: e.target.value,
+                      })
+                    }
+                    required
+                    disabled={!selected || loading}
+                  >
+                    <option value="">Seleccione repuesto</option>
+                    {repuestos.map((rep) => (
+                      <option key={rep.id_repuesto} value={rep.id_repuesto}>
+                        {rep.codigo} - {rep.nombre} ({rep.stock_actual} un)
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Cantidad Solicitada">
+                  <Input
+                    value={repuestoForm.amount}
+                    onChange={(e) =>
+                      setRepuestoForm({
+                        ...repuestoForm,
+                        amount: e.target.value,
+                      })
+                    }
+                    type="number"
+                    min="1"
+                    required
+                    disabled={!selected || loading}
+                  />
+                </Field>
+                <Button
+                  className="w-full"
+                  type="submit"
+                  variant="outline"
+                  disabled={!selected || loading}
                 >
-                  <option value="">Seleccionar</option>
-                  {repuestos.map((repuesto) => (
-                    <option key={repuesto.id_repuesto} value={repuesto.id_repuesto}>
-                      {repuesto.codigo} - {repuesto.nombre}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Cantidad">
-                <Input
-                  value={repuestoForm.cantidad}
-                  onChange={(event) =>
-                    setRepuestoForm({ ...repuestoForm, cantidad: event.target.value })
-                  }
-                  type="number"
-                  min="1"
-                  required
-                />
-              </Field>
+                  <Wrench className="h-4 w-4 mr-2" />
+                  Inyectar Repuesto
+                </Button>
+              </form>
+            </div>
+
+            <div className="border-t pt-4">
               <Button
                 className="w-full"
-                type="submit"
-                variant="outline"
+                variant="secondary"
+                onClick={cerrarOrden}
                 disabled={!selected || loading}
               >
-                <Wrench className="h-4 w-4" />
-                Agregar repuesto
+                <CheckCircle2 className="h-4 w-4 mr-2" />
+                Cierre Definitivo & Facturar
               </Button>
-            </form>
-
-            <Button
-              className="w-full"
-              variant="secondary"
-              onClick={cerrarOrden}
-              disabled={!selected || loading}
-            >
-              <CheckCircle2 className="h-4 w-4" />
-              Cerrar orden
-            </Button>
+            </div>
           </CardContent>
         </Card>
       </aside>
@@ -392,7 +509,9 @@ export default function OrdenesPage() {
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="space-y-2">
-      <Label>{label}</Label>
+      <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </Label>
       {children}
     </div>
   );
