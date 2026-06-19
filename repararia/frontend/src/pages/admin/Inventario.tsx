@@ -1,21 +1,10 @@
 import { useEffect, useState } from "react";
 import { RefreshCcw, AlertTriangle, Check, TriangleAlert, Package, Loader2 } from "lucide-react";
-import { apiRequest } from "../../api/client";
+import { IRepuesto, repuestoApi } from "../../api/client";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
 import { Table, TBody, TD, TH, THead, TR } from "../../components/ui/table";
 import { Input } from "../../components/ui/input";
-
-interface Repuesto {
-  id_repuesto: number;
-  codigo: string;
-  nombre: string;
-  descripcion?: string;
-  stock_actual: number;
-  stock_minimo: number;
-  precio_unitario: number;
-  proveedor?: string;
-}
 
 interface Props {
   session: { rol: "administrador" | "mecanico" | "sysadmin"; userId: number } | null;
@@ -24,8 +13,8 @@ interface Props {
 export default function InventarioPage({ session }: Props) {
   const isAuthorized = session?.rol === "administrador" || session?.rol === "sysadmin";
 
-  const [repuestos, setRepuestos] = useState<Repuesto[]>([]);
-  const [alertas, setAlertas] = useState<Repuesto[]>([]);
+  const [repuestos, setRepuestos] = useState<IRepuesto[]>([]);
+  const [alertas, setAlertas] = useState<IRepuesto[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -36,12 +25,12 @@ export default function InventarioPage({ session }: Props) {
     if (!isAuthorized) return;
     setLoading(true); setError(null);
     try {
-      const [globalData, alertasData] = await Promise.all([
-        apiRequest<{ items: Repuesto[] }>("/repuesto/list_repuestos?limit=100", { auth: true }),
-        apiRequest<Repuesto[]>("/repuesto/stock_repuesto?umbral=5", { auth: true }),
+      const [repData, alertasData] = await Promise.all([
+        repuestoApi.list({ limit: 100 }),
+        repuestoApi.stockAlertas(5),
       ]);
-      setRepuestos(globalData?.items ?? []);
-      setAlertas(Array.isArray(alertasData) ? alertasData : []);
+      setRepuestos(repData);
+      setAlertas(alertasData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al cargar el inventario.");
     } finally { setLoading(false); }
@@ -52,10 +41,7 @@ export default function InventarioPage({ session }: Props) {
   async function patchStock(id_repuesto: number, nuevoStock: number) {
     setLoading(true); setError(null); setMessage(null);
     try {
-      await apiRequest(`/repuesto/ajustar_stock_by/${id_repuesto}`, {
-        method: "PUT",
-        body: { stock_actual: nuevoStock },
-      });
+      await repuestoApi.ajustarStock(id_repuesto, nuevoStock);
       setMessage(`Stock actualizado para el repuesto #${id_repuesto}.`);
       setUpdatingId(null);
       await loadInventario();
@@ -136,7 +122,7 @@ export default function InventarioPage({ session }: Props) {
                 return (
                   <TR key={rep.id_repuesto} className={isCritical ? "bg-red-50/30" : ""}>
                     <TD>
-                      <span className="font-mono text-xs font-bold text-slate-500">{rep.codigo}</span>
+                      <span className="font-mono text-xs font-bold text-slate-500">{rep.sku}</span>
                     </TD>
                     <TD>
                       <p className="font-medium text-slate-900">{rep.nombre}</p>
