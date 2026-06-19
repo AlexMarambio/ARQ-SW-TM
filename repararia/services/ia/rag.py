@@ -33,7 +33,7 @@ def get_llm():
     if not api_key:
         raise ValueError("No se encontró GOOGLE_API_KEY")
     return ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash-lite",
+        model="gemini-3.1-flash-lite",
         google_api_key=api_key,
         temperature=0.2,
         max_tokens=512,  # Reducido — respuestas técnicas no necesitan ser largas

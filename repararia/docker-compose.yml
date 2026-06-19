@@ -48,6 +48,8 @@ services:
       - bus
     networks:
       - repararia-internal
+    volumes:
+      - ./docs:/app/docs
 
   bus:
     image: jrgiadach/soabus:v1
