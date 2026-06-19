@@ -1,21 +1,11 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Plus, RefreshCcw, Search, Edit2, Check, TriangleAlert, X, Loader2 } from "lucide-react";
-import { apiRequest } from "../../api/client";
+import { ICliente, clienteApi } from "../../api/client";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Table, TBody, TD, TH, THead, TR } from "../../components/ui/table";
-
-interface Cliente {
-  id_cliente: number;
-  rut: string;
-  email: string;
-  nombre: string;
-  telefono?: string;
-  direccion?: string;
-  fecha_registro: string;
-}
 
 interface ClientesPageProps {
   session: { rol: "administrador" | "mecanico" | "sysadmin"; userId: number } | null;
@@ -24,7 +14,7 @@ interface ClientesPageProps {
 export default function ClientesPage({ session }: ClientesPageProps) {
   const isAuthorized = session?.rol === "administrador" || session?.rol === "sysadmin";
 
-  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [clientes, setClientes] = useState<ICliente[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,8 +26,8 @@ export default function ClientesPage({ session }: ClientesPageProps) {
     if (!isAuthorized) return;
     setLoading(true); setError(null);
     try {
-      const data = await apiRequest<Cliente[]>("/cliente/list_clientes", { auth: true });
-      setClientes(Array.isArray(data) ? data : []);
+      const data = await clienteApi.list();
+      setClientes(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al cargar clientes.");
     } finally { setLoading(false); }
@@ -59,10 +49,10 @@ export default function ClientesPage({ session }: ClientesPageProps) {
     setLoading(true); setError(null); setMessage(null);
     try {
       if (editingId !== null) {
-        await apiRequest(`/cliente/update_cliente/${editingId}`, { method: "PUT", body: form });
+        await clienteApi.update(editingId, form);
         setMessage("Cliente actualizado correctamente.");
       } else {
-        await apiRequest("/cliente/create_cliente", { method: "POST", body: form });
+        await clienteApi.create(form as any);
         setMessage("Cliente registrado correctamente.");
       }
       cancelEdit();
@@ -72,7 +62,7 @@ export default function ClientesPage({ session }: ClientesPageProps) {
     } finally { setLoading(false); }
   }
 
-  function startEdit(c: Cliente) {
+  function startEdit(c: ICliente) {
     setEditingId(c.id_cliente);
     setForm({ rut: c.rut, nombre: c.nombre, email: c.email, telefono: c.telefono || "", direccion: c.direccion || "" });
   }

@@ -1,7 +1,7 @@
 import json
 import os
 from soa_lib import connect_to_bus, send_message, receive_message
-from rag import buscar_contexto, consultar_llm
+from rag import buscar_contexto, consultar_llm, consultar_llm_negocio
 
 SERVICE_NAME = "iabot"  # 5 caracteres: ia más tres espacios
 
@@ -50,26 +50,52 @@ def handle_consulta_tecnica(payload):
             }
         }
     except Exception as e:
-        # Si falla el LLM, respondemos con un mensaje genérico
-        return {
-            "status": "error",
-            "error_code": "LLM_ERROR",
-            "error_message": f"Error al consultar el asistente: {str(e)}",
-            "status_code": 500
-        }
+        error_msg = str(e)
+        # Manejar específicamente errores de rate limiting
+        if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
+            return {
+                "status": "success",  # Devolver éxito pero con mensaje amigable
+                "data": {
+                    "respuesta": "El servicio de inteligencia artificial está experimentando alta demanda en este momento. Por favor, espera unos segundos y vuelve a intentarlo.",
+                    "fuente": "error_recovery",
+                    "fragmentos_usados": resultado.get("fragmentos_utiles", 0),
+                    "error_temporal": True
+                }
+            }
+        else:
+            # Otros errores del LLM
+            return {
+                "status": "error",
+                "error_code": "LLM_ERROR",
+                "error_message": f"Error al consultar el asistente: {error_msg}",
+                "status_code": 500
+            }
 
 def handle_consulta_negocio(payload):
     pregunta = payload.get("pregunta")
+    contexto_datos = payload.get("contexto_datos", {})
+
     if not pregunta:
         return {"status": "error", "error_code": "VALIDATION_ERROR", "error_message": "Falta pregunta", "status_code": 400}
-    # Placeholder para consultas de negocio (puedes implementar más adelante)
-    return {
-        "status": "success",
-        "data": {
-            "respuesta": f"Consulta de negocio recibida: '{pregunta}'. (pendiente implementación avanzada)",
-            "fuente": "placeholder"
+
+    try:
+        respuesta = consultar_llm_negocio(pregunta, contexto_datos)
+        return {
+            "status": "success",
+            "data": {"respuesta": respuesta, "fuente": "negocio_datos_reales"}
         }
-    }
+    except Exception as e:
+        error_msg = str(e)
+        if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
+            return {
+                "status": "success",
+                "data": {
+                    "respuesta": "El servicio de IA está con alta demanda. Intenta de nuevo en unos segundos.",
+                    "fuente": "error_recovery",
+                    "error_temporal": True
+                }
+            }
+        return {"status": "error", "error_code": "LLM_ERROR", "error_message": error_msg, "status_code": 500}
 
 def main():
     BUS_HOST = os.getenv("BUS_HOST", "localhost")

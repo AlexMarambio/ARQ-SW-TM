@@ -63,7 +63,9 @@ export default function App() {
 
   const navItems = useMemo(() => {
     if (!session) {
-      return [{ id: "publica" as const, label: "Consulta pública", icon: Search }];
+      return [
+        { id: "publica" as const, label: "Consulta pública", icon: Search },
+      ];
     }
 
     if (session.rol === "administrador" || session.rol === "sysadmin") {
@@ -128,7 +130,6 @@ export default function App() {
             </div>
             <div>
               <h1 className="text-xl font-semibold">RepararIA</h1>
-              <p className="text-sm text-muted-foreground">CRM/ERP de taller mecanico</p>
             </div>
           </div>
 
@@ -161,7 +162,11 @@ export default function App() {
                 </Button>
               </>
             ) : (
-              <Button variant="outline" size="sm" onClick={() => setView("dashboard")}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setView("dashboard")}
+              >
                 Iniciar sesion
               </Button>
             )}
