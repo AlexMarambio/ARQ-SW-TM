@@ -4,6 +4,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage
 import os
 from dotenv import load_dotenv
+import json
 
 load_dotenv()
 
@@ -33,7 +34,7 @@ def get_llm():
     if not api_key:
         raise ValueError("No se encontró GOOGLE_API_KEY")
     return ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash-lite",
+        model="gemini-3.1-flash-lite",
         google_api_key=api_key,
         temperature=0.2,
         max_tokens=512,  # Reducido — respuestas técnicas no necesitan ser largas
@@ -41,6 +42,27 @@ def get_llm():
 
 def get_collection(tenant_id: str):
     return chroma.get_or_create_collection(name=f"tecnico_{tenant_id}")
+
+def consultar_llm_negocio(pregunta: str, contexto_datos: dict) -> str:
+    """Recibe los datos ya armados y redacta una respuesta en lenguaje natural."""
+    
+    contexto_json = json.dumps(contexto_datos, default=str, ensure_ascii=False)
+
+    prompt = f"""Eres un asistente de negocio para el administrador de un taller mecánico.
+Responde la pregunta usando SOLO los datos provistos abajo. Sé conciso y directo.
+Si los datos no permiten responder, dilo claramente.
+
+DATOS DEL TALLER (JSON):
+{contexto_json}
+
+PREGUNTA DEL ADMINISTRADOR:
+{pregunta}
+
+RESPUESTA:"""
+
+    llm = get_llm()
+    response = llm.invoke([HumanMessage(content=prompt)])
+    return response.content
 
 def buscar_contexto(pregunta: str, tenant_id: str, n_resultados: int = 4) -> dict:
     """

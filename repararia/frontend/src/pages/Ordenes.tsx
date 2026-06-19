@@ -22,6 +22,9 @@ export default function OrdenesPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [clientes, setClientes] = useState<any[]>([]);
+  const [vehiculos, setVehiculos] = useState<any[]>([]);
+  const [mecanicos, setMecanicos] = useState<any[]>([]);
 
   const [newOrden, setNewOrden] = useState({
     id_cliente: "", id_vehiculo: "", id_mecanico: "",

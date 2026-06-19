@@ -54,7 +54,7 @@ services:
     container_name: repararia-bus
     restart: unless-stopped
     ports:
-      - "5000:5000"
+      - "5001:5000"
     networks:
       - repararia-internal
 
