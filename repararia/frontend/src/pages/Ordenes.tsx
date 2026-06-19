@@ -248,7 +248,7 @@ export default function OrdenesPage() {
                   <select
                     className="flex h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
                     value={estado}
-                    onChange={(e) => setEstado(e.target.value)}
+                    onChange={(e) => setEstado(e.target.value as EstadoOrden)}
                     disabled={!selected || loading}
                   >
                     {ESTADOS.map((item) => (
@@ -276,7 +276,7 @@ export default function OrdenesPage() {
                       <option value="">Seleccionar...</option>
                       {repuestos.map((rep) => (
                         <option key={rep.id_repuesto} value={rep.id_repuesto}>
-                          {rep.codigo} — {rep.nombre} ({rep.stock_actual} un)
+                          {rep.sku} — {rep.nombre} ({rep.stock_actual} un)
                         </option>
                       ))}
                     </select>
